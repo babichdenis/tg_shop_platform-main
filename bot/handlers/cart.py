@@ -23,12 +23,15 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+# --- Состояния ---
+
 class OrderState(StatesGroup):
     waiting_for_address = State()
     waiting_for_phone = State()
     waiting_for_wishes = State()
     waiting_for_delivery_time = State()
     waiting_for_confirmation = State()
+    waiting_for_edit_choice = State()  # Новое состояние для выбора поля редактирования
 
 # Инициализация Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_app.config.settings")
@@ -205,17 +208,17 @@ def generate_cart_keyboard(items):
 
     return keyboard
 
+def generate_back_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")]
+    ])
+
 def generate_skip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="Пропустить", callback_data="skip"),
-            InlineKeyboardButton(text="Отмена", callback_data="cancel")
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="back")
         ]
-    ])
-
-def generate_cancel_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Отмена", callback_data="cancel")]
     ])
 
 def generate_confirmation_keyboard():
@@ -225,7 +228,22 @@ def generate_confirmation_keyboard():
             InlineKeyboardButton(text="✏️ Изменить", callback_data="edit")
         ],
         [
-            InlineKeyboardButton(text="Отмена", callback_data="cancel")
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="back")
+        ]
+    ])
+
+def generate_edit_choice_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📍 Адрес", callback_data="edit_address"),
+            InlineKeyboardButton(text="📞 Телефон", callback_data="edit_phone")
+        ],
+        [
+            InlineKeyboardButton(text="💬 Пожелания", callback_data="edit_wishes"),
+            InlineKeyboardButton(text="⏰ Время доставки", callback_data="edit_delivery_time")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_confirmation")
         ]
     ])
 
@@ -246,7 +264,7 @@ async def show_cart(user, message: Message | CallbackQuery):
             await message.message.edit_text(text, reply_markup=kb)
         return
 
-    items_text, total = await get_cart_details(items[0].cart.id)  # Исправлено: get_order_details -> get_cart_details
+    items_text, total = await get_cart_details(items[0].cart.id)
     text = (
         html.bold("🛒 Ваша корзина:") + "\n\n" +
         items_text +
@@ -270,7 +288,7 @@ async def handle_cart(request: Message | CallbackQuery) -> None:
     """
     Обработчик кнопки/команды "Корзина".
     """
-    user, _ = await get_or_create_user(request.from_user.id)  # Исправлено: распаковываем кортеж
+    user, _ = await get_or_create_user(request.from_user.id)
     logger.info(f"Обработчик корзины вызван пользователем: {user.telegram_id}")
     
     items = await get_cart_items(user)
@@ -322,7 +340,7 @@ async def handle_cart(request: Message | CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("remove_item_"))
 async def remove_item(callback: CallbackQuery):
-    user, _ = await get_or_create_user(callback.from_user.id)  # Исправлено: распаковываем кортеж
+    user, _ = await get_or_create_user(callback.from_user.id)
     product_id = int(callback.data.split("_")[-1])
     
     await remove_item_from_cart(user, product_id)
@@ -338,11 +356,20 @@ async def start_checkout(callback: CallbackQuery, state: FSMContext):
 
     msg = await callback.message.answer(
         "📍 Пожалуйста, укажите адрес доставки:",
-        reply_markup=generate_cancel_keyboard()
+        reply_markup=generate_back_keyboard()
     )
 
     await state.update_data(message_id=msg.message_id)
     await state.set_state(OrderState.waiting_for_address)
+
+@router.callback_query(F.data == "back", OrderState.waiting_for_address)
+async def back_from_address(callback: CallbackQuery, state: FSMContext):
+    """
+    Возвращает пользователя к корзине из шага ввода адреса.
+    """
+    await state.clear()  # Сбрасываем состояние, так как это первый шаг
+    user, _ = await get_or_create_user(callback.from_user.id)
+    await show_cart(user, callback)
 
 @router.message(OrderState.waiting_for_address)
 async def process_address(message: Message, state: FSMContext):
@@ -357,10 +384,28 @@ async def process_address(message: Message, state: FSMContext):
 
     msg = await message.answer(
         "📞 Пожалуйста, укажите ваш номер телефона:",
-        reply_markup=generate_cancel_keyboard()
+        reply_markup=generate_back_keyboard()
     )
     await state.update_data(message_id=msg.message_id)
     await state.set_state(OrderState.waiting_for_phone)
+
+@router.callback_query(F.data == "back", OrderState.waiting_for_phone)
+async def back_from_phone(callback: CallbackQuery, state: FSMContext):
+    """
+    Возвращает пользователя к вводу адреса из шага ввода телефона.
+    """
+    data = await state.get_data()
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "📍 Пожалуйста, укажите адрес доставки:",
+        reply_markup=generate_back_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_address)
 
 @router.message(OrderState.waiting_for_phone)
 async def process_phone(message: Message, state: FSMContext):
@@ -383,6 +428,24 @@ async def process_phone(message: Message, state: FSMContext):
     )
     await state.update_data(message_id=msg.message_id)
     await state.set_state(OrderState.waiting_for_wishes)
+
+@router.callback_query(F.data == "back", OrderState.waiting_for_wishes)
+async def back_from_wishes(callback: CallbackQuery, state: FSMContext):
+    """
+    Возвращает пользователя к вводу телефона из шага ввода пожеланий.
+    """
+    data = await state.get_data()
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "📞 Пожалуйста, укажите ваш номер телефона:",
+        reply_markup=generate_back_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_phone)
 
 @router.message(OrderState.waiting_for_wishes)
 @router.callback_query(F.data == "skip", OrderState.waiting_for_wishes)
@@ -407,6 +470,24 @@ async def process_wishes(request: Message | CallbackQuery, state: FSMContext):
     await state.update_data(message_id=msg.message_id)
     await state.set_state(OrderState.waiting_for_delivery_time)
 
+@router.callback_query(F.data == "back", OrderState.waiting_for_delivery_time)
+async def back_from_delivery_time(callback: CallbackQuery, state: FSMContext):
+    """
+    Возвращает пользователя к вводу пожеланий из шага ввода времени доставки.
+    """
+    data = await state.get_data()
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "💬 Укажите пожелания к заказу (или нажмите 'Пропустить'):",
+        reply_markup=generate_skip_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_wishes)
+
 @router.message(OrderState.waiting_for_delivery_time)
 @router.callback_query(F.data == "skip", OrderState.waiting_for_delivery_time)
 async def process_delivery_time(request: Message | CallbackQuery, state: FSMContext):
@@ -415,7 +496,7 @@ async def process_delivery_time(request: Message | CallbackQuery, state: FSMCont
     
     # Получаем данные для подтверждения
     data = await state.get_data()
-    user, _ = await get_or_create_user(request.from_user.id)  # Исправлено: распаковываем кортеж
+    user, _ = await get_or_create_user(request.from_user.id)
     cart, _ = await get_cart(user)
     items_text, total = await get_cart_details(cart.id)
 
@@ -447,10 +528,31 @@ async def process_delivery_time(request: Message | CallbackQuery, state: FSMCont
     await state.update_data(message_id=msg.message_id)
     await state.set_state(OrderState.waiting_for_confirmation)
 
+@router.callback_query(F.data == "back", OrderState.waiting_for_confirmation)
+async def back_from_confirmation(callback: CallbackQuery, state: FSMContext):
+    """
+    Возвращает пользователя к вводу времени доставки из шага подтверждения.
+    """
+    data = await state.get_data()
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "⏰ Укажите желаемое время доставки (или нажмите 'Пропустить'):",
+        reply_markup=generate_skip_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_delivery_time)
+
 @router.callback_query(F.data == "confirm", OrderState.waiting_for_confirmation)
 async def confirm_order(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    """
+    Обрабатывает подтверждение заказа.
+    """
     data = await state.get_data()
-    user, _ = await get_or_create_user(callback.from_user.id)  # Исправлено: распаковываем кортеж
+    user, _ = await get_or_create_user(callback.from_user.id)
 
     try:
         # Создаем заказ
@@ -490,7 +592,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext, bot: Bot):
         )
 
         # Отправляем уведомление администратору
-        if SUPPORT_TELEGRAM:
+        if SUPPORT_TELEGRAM and SUPPORT_TELEGRAM.strip():
             admin_text = (
                 f"🔔 Новый заказ #{order.id}!\n\n"
                 f"👤 Пользователь: {user.telegram_id}\n"
@@ -501,12 +603,14 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext, bot: Bot):
             )
             try:
                 await bot.send_message(
-                    chat_id=SUPPORT_TELEGRAM,
+                    chat_id=int(SUPPORT_TELEGRAM),
                     text=admin_text,
                     parse_mode=ParseMode.HTML
                 )
             except Exception as e:
-                logger.error(f"Ошибка отправки уведомления: {e}")
+                logger.error(f"Ошибка отправки уведомления администратору: {e}")
+        else:
+            logger.warning("SUPPORT_TELEGRAM не указан в .env, уведомление администратору не отправлено.")
 
     except Exception as e:
         logger.error(f"Ошибка создания заказа: {e}")
@@ -517,3 +621,122 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext, bot: Bot):
             ]))
     
     await state.clear()
+
+@router.callback_query(F.data == "edit", OrderState.waiting_for_confirmation)
+async def edit_order(callback: CallbackQuery, state: FSMContext):
+    """
+    Обрабатывает нажатие на "Изменить", показывая пользователю варианты редактирования.
+    """
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "Что вы хотите изменить?",
+        reply_markup=generate_edit_choice_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_edit_choice)
+
+@router.callback_query(F.data == "back_to_confirmation", OrderState.waiting_for_edit_choice)
+async def back_to_confirmation(callback: CallbackQuery, state: FSMContext):
+    """
+    Возвращает пользователя к подтверждению заказа из меню редактирования.
+    """
+    data = await state.get_data()
+    user, _ = await get_or_create_user(callback.from_user.id)
+    cart, _ = await get_cart(user)
+    items_text, total = await get_cart_details(cart.id)
+
+    text = (
+        f"📋 Проверьте данные заказа:\n\n"
+        f"📍 Адрес: {html.quote(data.get('address'))}\n"
+        f"📞 Телефон: {html.quote(data.get('phone'))}\n"
+        f"💬 Пожелания: {html.quote(data.get('wishes')) if data.get('wishes') else 'Нет'}\n"
+        f"⏰ Время доставки: {html.quote(data.get('desired_delivery_time')) if data.get('desired_delivery_time') else 'Не указано'}\n\n"
+        f"🛒 Состав заказа:\n{items_text}\n\n"
+        f"💵 Итого: {html.bold(f'{total} ₽')}\n\n"
+        f"Всё верно?"
+    )
+
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        text,
+        reply_markup=generate_confirmation_keyboard(),
+        parse_mode=ParseMode.HTML
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_confirmation)
+
+@router.callback_query(F.data == "edit_address", OrderState.waiting_for_edit_choice)
+async def edit_address(callback: CallbackQuery, state: FSMContext):
+    """
+    Позволяет пользователю отредактировать адрес.
+    """
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "📍 Пожалуйста, укажите новый адрес доставки:",
+        reply_markup=generate_back_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_address)
+
+@router.callback_query(F.data == "edit_phone", OrderState.waiting_for_edit_choice)
+async def edit_phone(callback: CallbackQuery, state: FSMContext):
+    """
+    Позволяет пользователю отредактировать номер телефона.
+    """
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "📞 Пожалуйста, укажите ваш новый номер телефона:",
+        reply_markup=generate_back_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_phone)
+
+@router.callback_query(F.data == "edit_wishes", OrderState.waiting_for_edit_choice)
+async def edit_wishes(callback: CallbackQuery, state: FSMContext):
+    """
+    Позволяет пользователю отредактировать пожелания.
+    """
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "💬 Укажите новые пожелания к заказу (или нажмите 'Пропустить'):",
+        reply_markup=generate_skip_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_wishes)
+
+@router.callback_query(F.data == "edit_delivery_time", OrderState.waiting_for_edit_choice)
+async def edit_delivery_time(callback: CallbackQuery, state: FSMContext):
+    """
+    Позволяет пользователю отредактировать время доставки.
+    """
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    msg = await callback.message.answer(
+        "⏰ Укажите новое желаемое время доставки (или нажмите 'Пропустить'):",
+        reply_markup=generate_skip_keyboard()
+    )
+    await state.update_data(message_id=msg.message_id)
+    await state.set_state(OrderState.waiting_for_delivery_time)
