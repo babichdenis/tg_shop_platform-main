@@ -8,9 +8,9 @@ load_dotenv()
 # Базовая директория проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-YOOKASSA_SHOP_ID = os.getenv('YOOKASSA_SHOP_ID')
-YOOKASSA_API_KEY = os.getenv('YOOKASSA_API_KEY')
-YOOKASSA_RETURN_URL = os.getenv('YOOKASSA_RETURN_URL', 'https://example.com/payment-callback/')
+# YOOKASSA_SHOP_ID = os.getenv('YOOKASSA_SHOP_ID')
+# YOOKASSA_API_KEY = os.getenv('YOOKASSA_API_KEY')
+# YOOKASSA_RETURN_URL = os.getenv('YOOKASSA_RETURN_URL', 'https://example.com/payment-callback/')
 
 # Секретный ключ
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'fallback_secret_key')
@@ -100,7 +100,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ==============  ВАЖНО  ==============
 # Инициализация учётных данных YooKassa:
 
-from yookassa import Configuration
+# from yookassa import Configuration
 
-Configuration.account_id = YOOKASSA_SHOP_ID
-Configuration.secret_key = YOOKASSA_API_KEY
+# Configuration.account_id = YOOKASSA_SHOP_ID
+# Configuration.secret_key = YOOKASSA_API_KEY

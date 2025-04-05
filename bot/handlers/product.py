@@ -1,3 +1,4 @@
+# bot/handlers/product.py
 import os
 from typing import Dict, Optional, Tuple
 
@@ -70,7 +71,10 @@ async def get_or_create_cart(user: TelegramUser) -> Tuple[Cart, bool]:
     """
     @sync_to_async(thread_sensitive=True)
     def _get_or_create():
-        cart, created = Cart.objects.get_or_create(user=user, is_active=True)
+        cart, created = Cart.objects.get_or_create(
+            user=user,
+            is_active=True
+        )
         if created:
             logger.info(f"Создана новая корзина для пользователя {user.telegram_id}.")
         else:
@@ -81,11 +85,6 @@ async def get_or_create_cart(user: TelegramUser) -> Tuple[Cart, bool]:
 async def update_cart_item(cart: Cart, product: Product, quantity: int) -> Optional[CartItem]:
     """
     Обновляет количество товара в корзине. Если количество становится меньше 1, удаляет товар из корзины.
-
-    :param cart: Корзина пользователя
-    :param product: Товар для обновления
-    :param quantity: Изменение количества (может быть положительным или отрицательным)
-    :return: Обновленный объект CartItem или None, если товар удален из корзины
     """
     @sync_to_async(thread_sensitive=True)
     def _update(c: Cart, p: Product, q: int) -> Optional[CartItem]:
@@ -99,7 +98,7 @@ async def update_cart_item(cart: Cart, product: Product, quantity: int) -> Optio
         else:
             item.quantity += q
             if item.quantity < 1:
-                item.soft_delete()  # Используем soft_delete вместо delete
+                item.soft_delete()
                 logger.info(f"Товар {p.name} (ID: {p.id}) удален из корзины пользователя {c.user.telegram_id} из-за нулевого количества.")
                 return None
             item.save()
@@ -135,20 +134,20 @@ def product_detail_keyboard(
         ],
     ]
 
-    # Отображение кнопки корзины, если в ней есть товары
-    if cart_quantity > 0:
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"🛒 Корзина ({cart_total} ₽) ({cart_quantity} шт.)",
-                callback_data="cart"
-            )
-        ])
-        logger.debug("Добавлена кнопка 'Корзина' в клавиатуру продукта.")
+    cart_text = f"🛒 Корзина: {cart_total} ₽ ({cart_quantity} шт.)" if cart_quantity > 0 else "🛒 Корзина: пуста"
+    buttons.append([
+        InlineKeyboardButton(
+            text=cart_text,
+            callback_data="cart"
+        )
+    ])
+    logger.debug("Добавлена кнопка 'Корзина' в клавиатуру продукта.")
 
     buttons.append([
-        InlineKeyboardButton(text="<-- Назад", callback_data=back_callback)
+        InlineKeyboardButton(text="<-- Назад", callback_data=back_callback),
+        InlineKeyboardButton(text="В меню", callback_data="main_menu")
     ])
-    logger.debug("Добавлена кнопка 'Назад' в клавиатуру продукта.")
+    logger.debug("Добавлены кнопки 'Назад' и 'В меню' в клавиатуру продукта.")
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -165,17 +164,20 @@ async def show_product_detail(callback: CallbackQuery):
 
     try:
         product = await get_product_by_id(product_id)
-        # Инициализация количества при открытии карточки товара
         quantity_storage[(user_id, product_id)] = 1
         logger.debug(f"Установлено начальное количество для продукта ID {product_id}: 1.")
 
         back_data = await generate_back_data(product)
-        text = generate_product_text(product)
+        text = await generate_product_text(product)
+
+        user, _ = await get_or_create_user(user_id=user_id)
+        cart_total = await get_cart_total(user)
+        cart_quantity = await get_cart_quantity(user)
 
         if product.photo:
-            await handle_photo_message(callback, product, text, back_data)
+            await handle_photo_message(callback, product, text, back_data, cart_total, cart_quantity)
         else:
-            await handle_text_message(callback, product, text, back_data, quantity=1)
+            await handle_text_message(callback, product, text, back_data, quantity=1, cart_total=cart_total, cart_quantity=cart_quantity)
 
     except Product.DoesNotExist:
         logger.error(f"Товар с ID {product_id} не найден.")
@@ -230,22 +232,19 @@ async def add_to_cart_handler(callback: CallbackQuery):
 
     try:
         product = await get_product_by_id(product_id)
-        user = await get_or_create_user(user_id)
+        user, _ = await get_or_create_user(user_id=user_id)
         logger.debug(f"Пользователь найден: {user}")
 
-        # Получаем или создаем корзину
         cart, created = await get_or_create_cart(user)
         if created:
             logger.info(f"Создана новая корзина для пользователя {user.telegram_id}.")
 
-        # Добавляем товар в корзину
         item = await update_cart_item(cart, product, quantity)
         if item:
             logger.info(f"Товар {product.name} добавлен/обновлён в корзине пользователя {user.telegram_id} с количеством {item.quantity}.")
         else:
             logger.info(f"Товар {product.name} удалён из корзины пользователя {user.telegram_id} из-за нулевого количества.")
 
-        # Сбрасываем количество после добавления
         key = (user_id, product_id)
         if key in quantity_storage:
             del quantity_storage[key]
@@ -254,7 +253,6 @@ async def add_to_cart_handler(callback: CallbackQuery):
         await callback.answer(f"✅ Добавлено: {product.name} × {quantity}", show_alert=True)
         logger.info(f"Товар {product.name} добавлен в корзину пользователя {user.telegram_id}.")
 
-        # Обновляем данные корзины
         cart_total = await get_cart_total(user)
         cart_quantity = await get_cart_quantity(user)
         logger.debug(f"Корзина пользователя {user.telegram_id}: {cart_total} ₽, {cart_quantity} шт.")
@@ -302,7 +300,12 @@ async def update_product_message(
         else:
             quantity = quantity_storage.get(key, 1)
 
-        text = generate_product_text(product)
+        if not cart_total and not cart_quantity:
+            user, _ = await get_or_create_user(user_id=user_id)
+            cart_total = await get_cart_total(user)
+            cart_quantity = await get_cart_quantity(user)
+
+        text = await generate_product_text(product)
         markup = product_detail_keyboard(
             product.id,
             back_data,
@@ -337,23 +340,33 @@ async def generate_back_data(product: Product) -> str:
     """
     Генерирует callback_data для кнопки возврата на основе категории продукта.
     """
-    back_data = f"category_{product.category_id}_1"
+    back_data = f"cat_page_{product.category_id}_1"
     logger.debug(f"Генерация callback_data для возврата к категории ID {product.category_id}.")
     return back_data
 
-def generate_product_text(product: Product) -> str:
+async def generate_product_text(product: Product) -> str:
     """
-    Генерирует текстовое описание продукта.
+    Генерирует текстовое описание продукта с breadcrumb.
     """
+    breadcrumbs = []
+    current_category = product.category
+    while current_category:
+        breadcrumbs.append(current_category.name)
+        current_category = await sync_to_async(lambda: current_category.parent)()
+    
+    breadcrumbs.append("Каталог")
+    breadcrumb_text = " > ".join(reversed(breadcrumbs))
+    
     text = (
+        f"{breadcrumb_text}\n\n"
         f"{hbold(product.name)}\n"
         f"Цена: {product.price}₽\n\n"
         f"{product.description or 'Описание отсутствует'}"
     )
-    logger.debug(f"Сгенерирован текст для продукта {product.name} (ID: {product.id}).")
+    logger.debug(f"Сгенерирован текст для продукта {product.name} (ID: {product.id}) с breadcrumb: {breadcrumb_text}.")
     return text
 
-async def handle_photo_message(callback: CallbackQuery, product: Product, text: str, back_data: str):
+async def handle_photo_message(callback: CallbackQuery, product: Product, text: str, back_data: str, cart_total: int, cart_quantity: int):
     """
     Обрабатывает сообщение с фотографией продукта.
     """
@@ -363,23 +376,22 @@ async def handle_photo_message(callback: CallbackQuery, product: Product, text: 
         msg = await callback.message.answer_photo(
             photo=FSInputFile(product.photo.path),
             caption=text,
-            reply_markup=product_detail_keyboard(product.id, back_data)
+            reply_markup=product_detail_keyboard(product.id, back_data, cart_total=cart_total, cart_quantity=cart_quantity)
         )
-        # Сохраняем начальное количество для продукта
         quantity_storage[(callback.from_user.id, product.id)] = 1
         logger.debug(f"Отправлено новое сообщение с фото продукта ID {product.id} пользователю {callback.from_user.id}.")
     except Exception as e:
         logger.error(f"Ошибка при обработке фото продукта ID {product.id}: {e}")
         await callback.answer("Произошла ошибка при отображении фото товара.", show_alert=True)
 
-async def handle_text_message(callback: CallbackQuery, product: Product, text: str, back_data: str, quantity: int):
+async def handle_text_message(callback: CallbackQuery, product: Product, text: str, back_data: str, quantity: int, cart_total: int, cart_quantity: int):
     """
     Обрабатывает текстовое сообщение с деталями продукта.
     """
     try:
         await callback.message.edit_text(
             text=text,
-            reply_markup=product_detail_keyboard(product.id, back_data, quantity)
+            reply_markup=product_detail_keyboard(product.id, back_data, quantity, cart_total=cart_total, cart_quantity=cart_quantity)
         )
         logger.debug(f"Отредактировано текстовое сообщение для продукта ID {product.id} пользователю {callback.from_user.id}.")
     except TelegramBadRequest as e:

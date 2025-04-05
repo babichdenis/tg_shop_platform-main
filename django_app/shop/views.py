@@ -36,19 +36,3 @@ def order_list(request):
     logger.info(f'Суперпользователь {request.user} запросил список заказов.')
     orders = Order.objects.all()
     return render(request, 'shop/order_list.html', {'orders': orders})
-
-
-def payment_callback(request):
-    """
-    Обработчик обратного вызова платежа от платёжного шлюза Yookassa.
-
-    Логирует полученные данные и возвращает статус 200 OK.
-
-    :param request: HTTP-запрос с данными платежа.
-    :return: HTTP-ответ с текстом "OK".
-    """
-    logger.info(f'Получен callback платежа: {request.POST}')
-
-    # Здесь можно добавить логику обработки данных платежа, например, обновление статуса заказа
-
-    return HttpResponse("OK")

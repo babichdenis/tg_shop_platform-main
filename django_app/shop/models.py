@@ -1,9 +1,6 @@
 import logging
-from django.conf import settings
 from django.db import models
-from yookassa import Payment, Configuration
 from mptt.models import MPTTModel, TreeForeignKey
-
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +66,8 @@ class Product(models.Model):
         upload_to='product_photos/',
         blank=True,
         null=True,
-        default='product_photos/placeholder.png',
+        # default='product_photos/placeholder.png',
+        default=None,
         verbose_name="Фото товара"
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
@@ -136,44 +134,36 @@ class CartItem(models.Model):
         verbose_name_plural = "Элементы корзины"
 
 class Order(models.Model):
+    # Статусы заказа
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_ASSEMBLING = 'assembling'
+    STATUS_ON_WAY = 'on_way'
+    STATUS_DELIVERED = 'delivered'
+
+    STATUS_CHOICES = [
+        (STATUS_ACCEPTED, 'Принят'),
+        (STATUS_ASSEMBLING, 'В сборке'),
+        (STATUS_ON_WAY, 'В пути'),
+        (STATUS_DELIVERED, 'Доставлен'),
+    ]
+
     user = models.ForeignKey(TelegramUser, on_delete=models.CASCADE, related_name='orders', verbose_name="Пользователь")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     address = models.CharField(max_length=255, verbose_name="Адрес доставки")
+    phone = models.CharField(max_length=20, default="", verbose_name="Телефон")  # Добавили default=""
+    wishes = models.TextField(blank=True, null=True, verbose_name="Пожелания к заказу")
+    desired_delivery_time = models.CharField(max_length=100, blank=True, null=True, verbose_name="Желаемое время доставки")
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Итого")
-    is_paid = models.BooleanField(default=False, verbose_name="Подтвержден")
-    payment_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID платежа")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACCEPTED,
+        verbose_name="Статус"
+    )
     is_active = models.BooleanField(default=True, verbose_name="Активен")
 
     def __str__(self):
         return f"Заказ №{self.id} от {self.user.username or self.user.telegram_id}"
-
-    def create_payment(self):
-        try:
-            payment = Payment.create({
-                "amount": {
-                    "value": f"{float(self.total):.2f}",
-                    "currency": "RUB"
-                },
-                "confirmation": {
-                    "type": "redirect",
-                    "return_url": settings.YOOKASSA_RETURN_URL or "https://example.com/payment-callback/"
-                },
-                "capture": True,
-                "description": f"Заказ №{self.id}",
-                "metadata": {
-                    "order_id": self.id,
-                    "user_id": self.user.id
-                }
-            })
-            self.payment_id = payment.id
-            self.save()
-            logger.info(f'Платеж создан для заказа №{self.id} с payment_id={payment.id}')
-            return payment
-        except Exception as e:
-            logger.error(f"Ошибка при создании платежа для заказа №{self.id}: {e}", exc_info=True)
-            self.payment_id = None
-            self.save()
-            return None
 
     def soft_delete(self):
         self.is_active = False

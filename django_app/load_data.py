@@ -162,22 +162,21 @@ def clear_database():
     """
     Удаляет все данные из таблиц Category, Product и FAQ.
     """
-    pass
-    # try:
-    #     logging.info("Начата очистка базы данных...")
-    #     logging.info("Удаление товаров...")
-    #     Product.objects.all().delete()
-    #     logging.info("Товары удалены.")
-    #     logging.info("Удаление категорий...")
-    #     Category.objects.all().delete()
-    #     logging.info("Категории удалены.")
-    #     logging.info("Удаление FAQ...")
-    #     FAQ.objects.all().delete()
-    #     logging.info("FAQ удалены.")
-    #     logging.info("База данных успешно очищена.")
-    # except Exception as e:
-    #     logging.exception(f"Ошибка при очистке базы данных: {e}")
-    #     raise
+    try:
+        logging.info("Начата очистка базы данных...")
+        logging.info("Удаление товаров...")
+        Product.objects.all().delete()
+        logging.info("Товары удалены.")
+        logging.info("Удаление категорий...")
+        Category.objects.all().delete()
+        logging.info("Категории удалены.")
+        logging.info("Удаление FAQ...")
+        FAQ.objects.all().delete()
+        logging.info("FAQ удалены.")
+        logging.info("База данных успешно очищена.")
+    except Exception as e:
+        logging.exception(f"Ошибка при очистке базы данных: {e}")
+        raise
 
 def load_categories_and_products(data, parent=None):
     try:

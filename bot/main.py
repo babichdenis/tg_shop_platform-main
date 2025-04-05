@@ -1,5 +1,4 @@
 # bot/main.py
-
 import asyncio
 import logging
 import os
@@ -18,11 +17,10 @@ django.setup()
 
 # Импорты обработчиков
 from bot.handlers.start import router as start_router
-from bot.handlers.catalog import router as catalog_router
 from bot.handlers.product import router as product_router
 from bot.handlers.cart import router as cart_router
 from bot.handlers.faq import router as faq_router
-from bot.handlers.payments import router as payments_router
+from bot.handlers.categories import router as categories_router
 
 # Настройка логирования
 logging.basicConfig(
@@ -35,12 +33,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 async def set_bot_commands(bot: Bot):
     """
     Устанавливает доступные команды для бота.
-
-    :param bot: Экземпляр бота Aiogram
     """
     commands = [
         BotCommand(command="/start", description="Запустить бота"),
@@ -55,12 +50,9 @@ async def set_bot_commands(bot: Bot):
 async def on_startup(bot: Bot):
     """
     Действия, выполняемые при запуске бота.
-
-    :param bot: Экземпляр бота Aiogram
     """
     await set_bot_commands(bot)
     logger.info("Бот успешно запущен и готов к работе.")
-
 
 def main():
     """
@@ -82,11 +74,10 @@ def main():
 
     # Регистрация роутеров
     dp.include_router(start_router)
-    dp.include_router(catalog_router)
     dp.include_router(product_router)
     dp.include_router(cart_router)
     dp.include_router(faq_router)
-    dp.include_router(payments_router)
+    dp.include_router(categories_router)
     logger.info("Все роутеры успешно зарегистрированы.")
 
     try:
@@ -99,7 +90,6 @@ def main():
     finally:
         asyncio.run(bot.session.close())
         logger.info("Сессия бота закрыта.")
-
 
 if __name__ == "__main__":
     main()
