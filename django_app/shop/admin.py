@@ -2,40 +2,12 @@ import logging
 from django.contrib import admin
 from django.urls import path
 from django.http import HttpResponse, HttpResponseRedirect
-from django.utils.html import format_html
 from mptt.admin import MPTTModelAdmin, DraggableMPTTAdmin
 from .models import Category, Product, FAQ, Cart, CartItem, Order, OrderItem, TelegramUser
 from .tasks import export_orders_to_excel
 
 logger = logging.getLogger(__name__)
 logger.info('Инициализация admin.py для приложения shop.')
-
-# Глобальный JavaScript для клика по строке
-CLICKABLE_ROW_JS = """
-<script type="text/javascript">
-(function($) {
-    $(document).ready(function() {
-        console.log("Скрипт для клика по строкам загружен");
-        $('.results tr').each(function() {
-            var $row = $(this);
-            var link = $row.find('th a').attr('href');
-            if (link) {
-                console.log("Найдена строка с ссылкой:", link);
-                $row.css('cursor', 'pointer');
-                $row.click(function(e) {
-                    if (!$(e.target).is('a') && !$(e.target).is('input') && !$(e.target).closest('.status-change-form').length) {
-                        console.log("Клик по строке, переход на:", link);
-                        window.location.href = link;
-                    }
-                });
-            } else {
-                console.log("Ссылка не найдена в строке");
-            }
-        });
-    });
-})(django.jQuery);
-</script>
-"""
 
 @admin.register(Category)
 class CategoryAdmin(DraggableMPTTAdmin):
@@ -72,11 +44,6 @@ class CategoryAdmin(DraggableMPTTAdmin):
     def get_queryset(self, request):
         return Category.objects.all()
 
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        extra_context['extra_js'] = CLICKABLE_ROW_JS
-        return super().changelist_view(request, extra_context=extra_context)
-
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'category', 'price', 'created_at', 'is_active')
@@ -111,11 +78,6 @@ class ProductAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return Product.objects.all()
 
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        extra_context['extra_js'] = CLICKABLE_ROW_JS
-        return super().changelist_view(request, extra_context=extra_context)
-
 @admin.register(FAQ)
 class FAQAdmin(admin.ModelAdmin):
     list_display = ('id', 'question', 'is_active')
@@ -147,11 +109,6 @@ class FAQAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return FAQ.objects.all()
-
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        extra_context['extra_js'] = CLICKABLE_ROW_JS
-        return super().changelist_view(request, extra_context=extra_context)
 
 class CartItemInline(admin.TabularInline):
     model = CartItem
@@ -190,18 +147,13 @@ class CartAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return Cart.objects.all()
 
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        extra_context['extra_js'] = CLICKABLE_ROW_JS
-        return super().changelist_view(request, extra_context=extra_context)
-
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 1
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'created_at', 'status_display', 'total', 'is_active', 'change_status')
+    list_display = ('id', 'user', 'created_at', 'status_display', 'total', 'is_active')  # Убрали 'change_status'
     search_fields = ('user__username',)
     list_filter = ('status', 'is_active')
     inlines = [OrderItemInline]
@@ -210,25 +162,6 @@ class OrderAdmin(admin.ModelAdmin):
     def status_display(self, obj):
         return obj.get_status_display()
     status_display.short_description = "Статус"
-
-    def change_status(self, obj):
-        return format_html(
-            '<form class="status-change-form" action="{}" method="POST" style="display:inline;">'
-            '<select name="new_status">'
-            '<option value="accepted"{}>Принят</option>'
-            '<option value="assembling"{}>В сборке</option>'
-            '<option value="on_way"{}>В пути</option>'
-            '<option value="delivered"{}>Доставлен</option>'
-            '</select>'
-            '<button type="submit">Изменить</button>'
-            '</form>',
-            f"/admin/shop/order/{obj.id}/change-status/",
-            ' selected' if obj.status == Order.STATUS_ACCEPTED else '',
-            ' selected' if obj.status == Order.STATUS_ASSEMBLING else '',
-            ' selected' if obj.status == Order.STATUS_ON_WAY else '',
-            ' selected' if obj.status == Order.STATUS_DELIVERED else '',
-        )
-    change_status.short_description = "Изменить статус"
 
     def export_to_excel(self, request, queryset):
         file_path = export_orders_to_excel(queryset=queryset)
@@ -243,14 +176,10 @@ class OrderAdmin(admin.ModelAdmin):
         else:
             self.message_user(request, "Ошибка при экспорте заказов.", level='error')
             return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/admin/shop/order/'))
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path(
-                '<int:order_id>/change-status/',
-                self.admin_site.admin_view(self.change_status_view),
-                name='order-change-status'
-            ),
             path(
                 'export-excel/',
                 self.admin_site.admin_view(self.export_excel_view),
@@ -258,18 +187,6 @@ class OrderAdmin(admin.ModelAdmin):
             ),
         ]
         return custom_urls + urls
-
-    def change_status_view(self, request, order_id):
-        order = self.get_object(request, order_id)
-        if request.method == 'POST':
-            new_status = request.POST.get('new_status')
-            if new_status in dict(Order.STATUS_CHOICES):
-                order.status = new_status
-                order.save()
-                self.message_user(request, f"Статус заказа №{order.id} изменён на '{order.get_status_display()}'.")
-            else:
-                self.message_user(request, "Недопустимый статус.", level='error')
-        return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/admin/shop/order/'))
 
     def export_excel_view(self, request):
         file_path = export_orders_to_excel()
@@ -314,7 +231,6 @@ class OrderAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context['extra_js'] = CLICKABLE_ROW_JS
         extra_context['show_export_button'] = True  # Для отображения кнопки в шаблоне
         return super().changelist_view(request, extra_context=extra_context)
 
@@ -351,11 +267,6 @@ class TelegramUserAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return TelegramUser.objects.all()
-
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        extra_context['extra_js'] = CLICKABLE_ROW_JS
-        return super().changelist_view(request, extra_context=extra_context)
 
 # Глобальная настройка админки
 admin.site.site_header = "Админ-панель Telegram-магазина"

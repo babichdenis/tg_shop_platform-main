@@ -66,7 +66,6 @@ class Product(models.Model):
         upload_to='product_photos/',
         blank=True,
         null=True,
-        # default='product_photos/placeholder.png',
         default=None,
         verbose_name="Фото товара"
     )
@@ -150,7 +149,7 @@ class Order(models.Model):
     user = models.ForeignKey(TelegramUser, on_delete=models.CASCADE, related_name='orders', verbose_name="Пользователь")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     address = models.CharField(max_length=255, verbose_name="Адрес доставки")
-    phone = models.CharField(max_length=20, default="", verbose_name="Телефон")  # Добавили default=""
+    phone = models.CharField(max_length=20, default="", verbose_name="Телефон")
     wishes = models.TextField(blank=True, null=True, verbose_name="Пожелания к заказу")
     desired_delivery_time = models.CharField(max_length=100, blank=True, null=True, verbose_name="Желаемое время доставки")
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Итого")
@@ -161,6 +160,26 @@ class Order(models.Model):
         verbose_name="Статус"
     )
     is_active = models.BooleanField(default=True, verbose_name="Активен")
+
+    def save(self, *args, **kwargs):
+        # Сохраняем старый статус, если объект уже существует
+        old_status = None
+        if self.pk:
+            try:
+                old_instance = Order.objects.get(pk=self.pk)
+                old_status = old_instance.status
+            except Order.DoesNotExist:
+                pass
+
+        # Сохраняем объект
+        super().save(*args, **kwargs)
+
+        # Если статус изменился, отправляем уведомление
+        if old_status and old_status != self.status:
+            logger.info(f"Статус заказа №{self.id} изменён с {old_status} на {self.status}")
+            # Импортируем здесь, чтобы избежать циклического импорта
+            from .tasks import notify_user_of_status_change
+            notify_user_of_status_change(self.id, old_status, self.status)
 
     def __str__(self):
         return f"Заказ №{self.id} от {self.user.username or self.user.telegram_id}"
