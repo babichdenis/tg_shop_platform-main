@@ -268,6 +268,7 @@ class TelegramUserAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return TelegramUser.objects.all()
 
+
 # Глобальная настройка админки
 admin.site.site_header = "Админ-панель Telegram-магазина"
 admin.site.site_title = "Админ-панель"

@@ -125,7 +125,7 @@ async def format_user_profile(user: TelegramUser) -> str:
             text += (
                 f"Заказ #{order.id} от {order.created_at.strftime('%Y-%m-%d %H:%M')}\n"
                 f"Сумма: {order.total} ₽\n"
-                f"Статус: {order.status}\n"
+                f"Статус: {order.get_status_display()}\n"  # Используем get_status_display()
                 f"Адрес: {order.address}\n\n"
             )
     else:
@@ -139,7 +139,7 @@ async def format_user_profile(user: TelegramUser) -> str:
             text += (
                 f"Заказ #{order.id} от {order.created_at.strftime('%Y-%m-%d %H:%M')}\n"
                 f"Сумма: {order.total} ₽\n"
-                f"Статус: {order.status}\n"
+                f"Статус: {order.get_status_display()}\n"  # Используем get_status_display()
                 f"Адрес: {order.address}\n\n"
             )
     return text

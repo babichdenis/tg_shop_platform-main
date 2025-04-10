@@ -1,4 +1,3 @@
-# bot/handlers/categories.py
 import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -96,7 +95,7 @@ async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup: In
                 parse_mode="Markdown"
             )
         except Exception as delete_error:
-            logger.error(f"Ошибка при удалении и отправке нового сообщения: {delete_error}")
+            logger.error(f"Ошибка при удалении и отправке нового messages: {delete_error}")
             await callback.message.answer(
                 text,
                 reply_markup=reply_markup,
@@ -104,8 +103,23 @@ async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup: In
             )
 
 async def get_products_keyboard(category_id: int, page: int, products: list[Product], total_count: int, user: TelegramUser) -> InlineKeyboardMarkup:
-    """Генерация клавиатуры для товаров"""
-    buttons = [[InlineKeyboardButton(text=prod.name, callback_data=f"product_{prod.id}")] for prod in products]
+    """Генерация клавиатуры для товаров (2 кнопки в строке)"""
+    buttons = []
+    
+    # Группируем товары по 2 в ряд
+    for i in range(0, len(products), 2):
+        row = []
+        # Первый товар в ряду
+        prod1 = products[i]
+        row.append(InlineKeyboardButton(text=prod1.name, callback_data=f"product_{prod1.id}"))
+        
+        # Второй товар в ряду (если есть)
+        if i + 1 < len(products):
+            prod2 = products[i+1]
+            row.append(InlineKeyboardButton(text=prod2.name, callback_data=f"product_{prod2.id}"))
+        
+        buttons.append(row)
+    
     max_page = (total_count + PRODUCTS_PER_PAGE - 1) // PRODUCTS_PER_PAGE
 
     # Пагинация (только если больше 1 страницы)
@@ -172,14 +186,27 @@ async def catalog_command(message: Message):
         # Формируем клавиатуру для категорий
         buttons = []
 
-        # Добавляем кнопки категорий
-        for category in categories:
-            buttons.append([
+        # Группируем категории по 2 в ряд
+        for i in range(0, len(categories), 2):
+            row = []
+            # Первая категория в ряду
+            category1 = categories[i]
+            row.append(
                 InlineKeyboardButton(
-                    text=category.name,
-                    callback_data=f"cat_page_{category.id}_{1}"
+                    text=category1.name,
+                    callback_data=f"cat_page_{category1.id}_{1}"
                 )
-            ])
+            )
+            # Вторая категория в ряду (если есть)
+            if i + 1 < len(categories):
+                category2 = categories[i + 1]
+                row.append(
+                    InlineKeyboardButton(
+                        text=category2.name,
+                        callback_data=f"cat_page_{category2.id}_{1}"
+                    )
+                )
+            buttons.append(row)
 
         # Пагинация (только если больше 1 страницы)
         if total_pages > 1:
@@ -194,11 +221,6 @@ async def catalog_command(message: Message):
                 InlineKeyboardButton(text="➡️", callback_data=f"cat_page_root_2")
             )
             buttons.append(pagination_buttons)
-
-        # Кнопка "Прайс-лист"
-        buttons.append([
-            InlineKeyboardButton(text="📋 Прайс-лист", callback_data="price_list_1")
-        ])
 
         # Кнопка корзины
         cart_text = f"🛒 Корзина: {cart_total} ₽ ({cart_quantity} шт.)" if cart_quantity > 0 else "🛒 Корзина: пуста"
@@ -280,14 +302,27 @@ async def categories_pagination(callback: CallbackQuery):
         # Формируем клавиатуру для категорий
         buttons = []
 
-        # Добавляем кнопки категорий
-        for category in categories:
-            buttons.append([
+        # Группируем категории по 2 в ряд (и для главного уровня, и для подкатегорий)
+        for i in range(0, len(categories), 2):
+            row = []
+            # Первая категория в ряду
+            category1 = categories[i]
+            row.append(
                 InlineKeyboardButton(
-                    text=category.name,
-                    callback_data=f"cat_page_{category.id}_{1}"
+                    text=category1.name,
+                    callback_data=f"cat_page_{category1.id}_{1}"
                 )
-            ])
+            )
+            # Вторая категория в ряду (если есть)
+            if i + 1 < len(categories):
+                category2 = categories[i + 1]
+                row.append(
+                    InlineKeyboardButton(
+                        text=category2.name,
+                        callback_data=f"cat_page_{category2.id}_{1}"
+                    )
+                )
+            buttons.append(row)
 
         # Пагинация (только если больше 1 страницы)
         if total_pages > 1:
@@ -296,6 +331,10 @@ async def categories_pagination(callback: CallbackQuery):
                 pagination_buttons.append(
                     InlineKeyboardButton(text="⬅️", callback_data=f"cat_page_{parent_id}_{page - 1}")
                 )
+            else:
+                pagination_buttons.append(
+                    InlineKeyboardButton(text="⬅️", callback_data="noop")
+                )
             pagination_buttons.append(
                 InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="noop")
             )
@@ -303,12 +342,11 @@ async def categories_pagination(callback: CallbackQuery):
                 pagination_buttons.append(
                     InlineKeyboardButton(text="➡️", callback_data=f"cat_page_{parent_id}_{page + 1}")
                 )
+            else:
+                pagination_buttons.append(
+                    InlineKeyboardButton(text="➡️", callback_data="noop")
+                )
             buttons.append(pagination_buttons)
-
-        # Кнопка "Прайс-лист"
-        buttons.append([
-            InlineKeyboardButton(text="📋 Прайс-лист", callback_data="price_list_1")
-        ])
 
         # Кнопка корзины
         cart_text = f"🛒 Корзина: {cart_total} ₽ ({cart_quantity} шт.)" if cart_quantity > 0 else "🛒 Корзина: пуста"
@@ -321,7 +359,9 @@ async def categories_pagination(callback: CallbackQuery):
             back_callback = "main_menu"
         else:
             parent_category = await sync_to_async(Category.objects.get)(id=parent_id)
-            back_callback = "main_menu" if parent_category.parent is None else f"cat_page_{parent_category.parent.id}_1"
+            # Если у текущей категории есть родитель, возвращаемся к его родителю
+            grandparent_id = parent_category.parent.id if parent_category.parent else "root"
+            back_callback = f"cat_page_{grandparent_id}_1"
         buttons.append([
             InlineKeyboardButton(text="<-- Назад", callback_data=back_callback),
             InlineKeyboardButton(text="В меню", callback_data="main_menu")

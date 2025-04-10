@@ -133,17 +133,27 @@ class CartItem(models.Model):
         verbose_name_plural = "Элементы корзины"
 
 class Order(models.Model):
-    # Статусы заказа
-    STATUS_ACCEPTED = 'accepted'
-    STATUS_ASSEMBLING = 'assembling'
-    STATUS_ON_WAY = 'on_way'
-    STATUS_DELIVERED = 'delivered'
+    # Статусы заказа с эмодзи
+    STATUS_ACCEPTED = 'accepted'       # 🆕 Принят
+    STATUS_ASSEMBLING = 'assembling'   # 🛠️ В сборке
+    STATUS_PACKED = 'packed'           # 📦 Упакован
+    STATUS_ON_WAY = 'on_way'           # 🚚 В пути
+    STATUS_DELIVERED = 'delivered'     # ✅ Доставлен
+    STATUS_CANCELED = 'canceled'       # ❌ Отменён
+    STATUS_POSTPONED = 'postponed'     # ⏸️ Перенесён
+    STATUS_PROBLEM = 'problem'         # ❗ Проблема
+    STATUS_READY_FOR_PICKUP = 'ready_for_pickup'  # 🏪 Готов к самовывозу
 
     STATUS_CHOICES = [
-        (STATUS_ACCEPTED, 'Принят'),
-        (STATUS_ASSEMBLING, 'В сборке'),
-        (STATUS_ON_WAY, 'В пути'),
-        (STATUS_DELIVERED, 'Доставлен'),
+        (STATUS_ACCEPTED, '🆕 Принят'),
+        (STATUS_ASSEMBLING, '🛠️ В сборке'),
+        (STATUS_PACKED, '📦 Упакован'),
+        (STATUS_ON_WAY, '🚚 В пути'),
+        (STATUS_DELIVERED, '✅ Доставлен'),
+        (STATUS_CANCELED, '❌ Отменён'),
+        (STATUS_POSTPONED, '⏸️ Перенесён'),
+        (STATUS_PROBLEM, '❗ Проблема'),
+        (STATUS_READY_FOR_PICKUP, '🏪 Готов к самовывозу'),
     ]
 
     user = models.ForeignKey(TelegramUser, on_delete=models.CASCADE, related_name='orders', verbose_name="Пользователь")
@@ -162,24 +172,23 @@ class Order(models.Model):
     is_active = models.BooleanField(default=True, verbose_name="Активен")
 
     def save(self, *args, **kwargs):
-        # Сохраняем старый статус, если объект уже существует
+        # Получаем старый статус перед сохранением
         old_status = None
         if self.pk:
             try:
-                old_instance = Order.objects.get(pk=self.pk)
-                old_status = old_instance.status
+                old_status = Order.objects.get(pk=self.pk).status
             except Order.DoesNotExist:
                 pass
-
-        # Сохраняем объект
+        
         super().save(*args, **kwargs)
-
-        # Если статус изменился, отправляем уведомление
+        
+        # Отправляем уведомление при изменении статуса
         if old_status and old_status != self.status:
-            logger.info(f"Статус заказа №{self.id} изменён с {old_status} на {self.status}")
-            # Импортируем здесь, чтобы избежать циклического импорта
-            from .tasks import notify_user_of_status_change
-            notify_user_of_status_change(self.id, old_status, self.status)
+            try:
+                from django_app.shop.tasks import notify_user_of_status_change
+                notify_user_of_status_change(self.id, old_status, self.status)
+            except ImportError as e:
+                logger.error(f"Ошибка импорта функции уведомления: {e}")
 
     def __str__(self):
         return f"Заказ №{self.id} от {self.user.username or self.user.telegram_id}"

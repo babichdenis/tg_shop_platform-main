@@ -1,6 +1,7 @@
 import logging
 import openpyxl
 from django.core.files.storage import default_storage
+from django.db import transaction
 from .models import Order, OrderItem
 import aiohttp
 import asyncio
@@ -136,37 +137,40 @@ def export_orders_to_excel(queryset=None):
         return None
 
 def notify_user_of_status_change(order_id, old_status, new_status):
-    """
-    Задача для отправки уведомления пользователю при изменении статуса заказа.
-
-    Args:
-        order_id (int): ID заказа.
-        old_status (str): Старый статус.
-        new_status (str): Новый статус.
-    """
     try:
+        from .models import Order  # Локальный импорт для избежания циклических зависимостей
+        
         order = Order.objects.get(id=order_id)
         user = order.user
-        chat_id = user.telegram_id
-
-        # Получаем отображаемые названия статусов
-        status_display = dict(Order.STATUS_CHOICES)
-        old_status_display = status_display.get(old_status, old_status)
-        new_status_display = status_display.get(new_status, new_status)
-
-        # Формируем сообщение
+        
+        if not user.telegram_id:
+            logger.warning(f"У пользователя нет telegram_id: {user}")
+            return
+            
+        status_names = dict(Order.STATUS_CHOICES)
         message = (
-            f"📦 Статус вашего заказа №{order.id} изменён!\n\n"
-            f"Старый статус: {old_status_display}\n"
-            f"Новый статус: {new_status_display}"
+            f"🔄 Статус вашего заказа №{order_id} изменён:\n"
+            f"Было: {status_names.get(old_status, old_status)}\n"
+            f"Стало: {status_names.get(new_status, new_status)}"
         )
-
-        # Запускаем асинхронную отправку сообщения
-        success = asyncio.run(send_telegram_message(chat_id, message))
-        if not success:
-            logger.warning(f"Не удалось уведомить пользователя {chat_id} об изменении статуса заказа №{order.id}")
-
-    except Order.DoesNotExist:
-        logger.error(f"Заказ с ID {order_id} не найден при попытке уведомления.")
+        
+        # Используем синхронную версию отправки
+        send_telegram_message_sync(user.telegram_id, message)
+        
     except Exception as e:
-        logger.error(f"Ошибка при отправке уведомления о статусе заказа {order_id}: {e}")
+        logger.error(f"Ошибка уведомления: {e}")
+
+
+def send_telegram_message_sync(chat_id, text):
+    """Синхронная версия отправки сообщения"""
+    import requests
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    try:
+        response = requests.post(url, json={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        })
+        return response.status_code == 200
+    except Exception as e:
+        logger.error(f"Ошибка отправки: {e}")
