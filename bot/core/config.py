@@ -1,3 +1,4 @@
+# File: bot/core/config.py
 import os
 from dotenv import load_dotenv
 
@@ -14,6 +15,10 @@ SUPPORT_TELEGRAM = os.getenv("SUPPORT_TELEGRAM", "@SupportBot")
 # Константы для FAQ
 FAQ_PER_PAGE = 5  # Количество вопросов FAQ на одной странице
 FAQ_SEARCH_PER_PAGE = 5  # Количество результатов поиска FAQ на одной странице
+
+# Константы для каталога
+CATEGORIES_PER_PAGE = 5  # Количество категорий на одной странице
+PRODUCTS_PER_PAGE = 5  # Количество товаров на одной странице
 
 # Логирование
 LOGGING_CONFIG = {

@@ -16,8 +16,8 @@ echo "Применение миграций..."
 python django_app/manage.py migrate
 
 # Загрузка тестовых данных
-echo "Выполнение скрипта load_data.py..."
-python django_app/load_data.py
+# echo "Выполнение скрипта load_data.py..."
+# python django_app/load_data.py
 
 # Запуск сервера Django
 python django_app/manage.py runserver 0.0.0.0:8000

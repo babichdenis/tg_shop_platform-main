@@ -45,7 +45,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     from bot.handlers.product import router as product_router
     from bot.handlers.cart import router as cart_router
     from bot.handlers.faq import faq_router
-    from bot.handlers.categories import router as categories_router
+    from bot.handlers.catalog.views import router as catalog_router  # Новый импорт!
 
     # Регистрация роутеров
     dp.include_routers(
@@ -54,7 +54,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
         product_router,
         cart_router,
         faq_router,
-        categories_router
+        catalog_router  # Новый роутер!
     )
     logger.info("Все роутеры зарегистрированы")
     
