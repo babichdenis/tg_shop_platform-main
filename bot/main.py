@@ -1,95 +1,44 @@
-# bot/main.py
+# File: bot/main.py
 import asyncio
 import logging
 import os
-
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.types import BotCommand
-from dotenv import load_dotenv
-
+import sys
 import django
 
-# Установка переменной окружения для Django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_app.config.settings")
-django.setup()
+from bot.core.config import TELEGRAM_BOT_TOKEN, LOGGING_CONFIG  # Обновлённый путь
+from bot.core.bot_setup import setup_bot  # Обновлённый путь
 
-# Импорты обработчиков
-from bot.handlers.start import router as start_router
-from bot.handlers.product import router as product_router
-from bot.handlers.cart import router as cart_router
-from bot.handlers.faq import router as faq_router
-from bot.handlers.categories import router as categories_router
-
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler("logs/bot.log"),
-        logging.StreamHandler()
-    ]
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
+logger.info("Запуск bot/main.py")
 
-async def set_bot_commands(bot: Bot):
-    """
-    Устанавливает доступные команды для бота.
-    """
-    commands = [
-        BotCommand(command="/start", description="Запустить бота"),
-        BotCommand(command="/catalog", description="Открыть каталог"),
-        BotCommand(command="/cart", description="Корзина"),
-        BotCommand(command="/faq", description="Частые вопросы"),
-        BotCommand(command="/profile", description="Мой профиль") 
-    ]
-    await bot.set_my_commands(commands)
-    logger.info("Команды бота установлены.")
+# Настройка Django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_app.config.settings")
+logger.info("Инициализация Django")
+django.setup()
+logger.info("Django инициализирован")
 
-async def on_startup(bot: Bot):
-    """
-    Действия, выполняемые при запуске бота.
-    """
-    await set_bot_commands(bot)
-    logger.info("Бот успешно запущен и готов к работе.")
-
-def main():
-    """
-    Основная функция для запуска бота.
-    """
-    load_dotenv()
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-
-    if not bot_token:
-        logger.critical("TELEGRAM_BOT_TOKEN не найден в .env")
-        raise ValueError("TELEGRAM_BOT_TOKEN не найден в .env")
-
-    bot = Bot(
-        token=bot_token,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-    )
-    dp = Dispatcher()
-    dp.startup.register(on_startup)
-
-    # Регистрация роутеров
-    dp.include_router(start_router)
-    dp.include_router(product_router)
-    dp.include_router(cart_router)
-    dp.include_router(faq_router)
-    dp.include_router(categories_router)
-    logger.info("Все роутеры успешно зарегистрированы.")
-
+async def main():
+    logger.info("Вход в функцию main()")
     try:
-        logger.info("Запуск polling для бота.")
-        asyncio.run(dp.start_polling(bot))
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Бот остановлен вручную.")
+        logger.info(f"TELEGRAM_BOT_TOKEN: {'установлен' if TELEGRAM_BOT_TOKEN else 'не установлен'}")
+        bot, dp = setup_bot()
+        logger.info("Запуск polling")
+        await dp.start_polling(bot)
     except Exception as e:
-        logger.exception(f"Неожиданная ошибка при запуске бота: {e}")
+        logger.exception(f"Ошибка при запуске бота: {e}")
+        raise
     finally:
-        asyncio.run(bot.session.close())
-        logger.info("Сессия бота закрыта.")
+        if 'bot' in locals():
+            await bot.session.close()
+            logger.info("Сессия бота закрыта")
 
 if __name__ == "__main__":
-    main()
+    logger.info("Начало выполнения программы")
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Бот остановлен вручную")
+    except Exception as e:
+        logger.exception(f"Необработанная ошибка: {e}")
+        sys.exit(1)

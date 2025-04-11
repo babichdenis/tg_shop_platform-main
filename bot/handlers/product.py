@@ -3,7 +3,7 @@ import os
 from typing import Dict, Optional, Tuple
 
 from .cart import get_cart_total, get_cart_quantity
-from .start import get_or_create_user
+from bot.core.utils import get_or_create_user
 
 import django
 from asgiref.sync import sync_to_async
