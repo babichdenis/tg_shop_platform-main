@@ -39,7 +39,7 @@ async def start_command(message: Message):
             return
 
     # Отправка приветственного сообщения
-    from bot.handlers.cart import get_cart_quantity
+    from bot.handlers.cart.models import get_cart_quantity
     has_cart = await get_cart_quantity(user) > 0
     await message.answer(
         welcome_message(user_data.first_name, has_cart),

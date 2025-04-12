@@ -6,7 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from bot.handlers.start.messages import welcome_message, format_user_profile
 from bot.handlers.start.keyboards import main_menu_keyboard, profile_keyboard, price_list_keyboard
 from bot.core.utils import get_or_create_user
-from bot.handlers.cart import get_cart_quantity, get_cart_total
+from bot.handlers.cart.models import get_cart_quantity, get_cart_total
 
 router = Router()
 logger = logging.getLogger(__name__)

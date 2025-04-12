@@ -1,4 +1,4 @@
-# File: bot/core/config.py
+# bot/core/config.py
 import os
 from dotenv import load_dotenv
 
@@ -17,9 +17,9 @@ FAQ_PER_PAGE = 5  # Количество вопросов FAQ на одной с
 FAQ_SEARCH_PER_PAGE = 5  # Количество результатов поиска FAQ на одной странице
 
 # Константы для каталога
-CATEGORIES_PER_PAGE = 5  # Количество категорий на одной странице
-PRODUCTS_PER_PAGE = 5  # Количество товаров на одной странице
-
+CATEGORIES_PER_PAGE = 50  # Количество категорий на одной странице
+PRODUCTS_PER_PAGE = 50  # Количество товаров на одной странице
+CART_ITEMS_PER_PAGE = 50  # Количество товаров на странице в корзине
 # Логирование
 LOGGING_CONFIG = {
     "level": "INFO",

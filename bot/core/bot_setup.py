@@ -43,9 +43,9 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     # Импорт роутеров внутри функции
     from bot.handlers.start import commands_router, callbacks_router
     from bot.handlers.product import router as product_router
-    from bot.handlers.cart import router as cart_router
+    from bot.handlers.cart.handlers import router as cart_router
     from bot.handlers.faq import faq_router
-    from bot.handlers.catalog.views import router as catalog_router  # Новый импорт!
+    from bot.handlers.catalog.views import router as catalog_router 
 
     # Регистрация роутеров
     dp.include_routers(

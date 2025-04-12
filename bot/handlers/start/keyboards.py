@@ -1,5 +1,5 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from bot.handlers.cart import get_cart_quantity, get_cart_total
+from bot.handlers.cart.models import get_cart_quantity, get_cart_total
 from django_app.shop.models import TelegramUser
 
 async def main_menu_keyboard(user: TelegramUser) -> InlineKeyboardMarkup:

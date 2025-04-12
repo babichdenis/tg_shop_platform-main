@@ -6,7 +6,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
 from asgiref.sync import sync_to_async
 from django_app.shop.models import Category, Product, TelegramUser
-from bot.handlers.cart import get_cart_total, get_cart_quantity
+from bot.handlers.cart.models import get_cart_quantity, get_cart_total
 from bot.core.config import CATEGORIES_PER_PAGE, PRODUCTS_PER_PAGE
 from bot.core.utils import get_or_create_user
 from .keyboards import build_categories_keyboard, build_products_keyboard
