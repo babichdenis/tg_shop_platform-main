@@ -1,0 +1,53 @@
+<!-- django_app/templates/admin/shop/order/export_products.html -->
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div class="export-form-container">
+    <h1>Экспорт товаров</h1>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="export_form_submit" value="1">
+      {% for obj in queryset %}
+        <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">
+      {% endfor %}
+      <input type="hidden" name="action" value="export_products">
+
+      <p>
+        <label for="id_file_format">Формат файла:</label>
+        {{ form.file_format }}
+      </p>
+
+      <p>
+        <label for="id_fields">Поля для экспорта:</label>
+        <div class="checkbox-list">
+          {{ form.fields }}
+        </div>
+      </p>
+
+      <p>
+        <label for="id_category">Категория (опционально):</label>
+        {{ form.category }}
+      </p>
+
+      <p>
+        <label for="id_is_active">Статус:</label>
+        {{ form.is_active }}
+      </p>
+
+      <p>
+        <label>Диапазон дат создания:</label>
+        <div class="date-field-container">
+          <label for="id_date_from" style="font-weight: normal;">с:</label>
+          {{ form.date_from }}
+          <label for="id_date_to" style="font-weight: normal;">по:</label>
+          {{ form.date_to }}
+        </div>
+      </p>
+
+      <div class="buttons">
+        <button type="submit">Экспортировать</button>
+        <a href="{% url 'admin:shop_product_changelist' %}">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

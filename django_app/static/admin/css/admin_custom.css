@@ -1,0 +1,126 @@
+/* django_app/static/admin/css/admin_custom.css */
+.export-form-container {
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 20px;
+  background-color: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.export-form-container h1 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.export-form-container p {
+  margin-bottom: 15px; /* Увеличиваем отступ между полями */
+}
+
+.export-form-container label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 5px;
+  color: #444;
+}
+
+.export-form-container select,
+.export-form-container input[type="date"],
+.export-form-container input[type="file"] {
+  width: 100%;
+  padding: 10px; /* Увеличиваем padding для лучшей читаемости */
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+  background-color: #fff;
+  color: #333;
+  font-size: 16px; /* Увеличиваем размер шрифта */
+  line-height: 1.5; /* Увеличиваем высоту строки */
+  height: auto; /* Позволяем высоте адаптироваться */
+}
+
+.export-form-container select {
+  min-width: 200px; /* Минимальная ширина для select */
+  appearance: auto; /* Восстанавливаем стандартный вид select */
+  padding-right: 30px; /* Учитываем стрелку выпадающего списка */
+}
+
+.export-form-container .checkbox-list {
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #fff;
+  margin-bottom: 10px;
+}
+
+.export-form-container .checkbox-list input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+.export-form-container .checkbox-list label {
+  font-weight: normal;
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 16px; /* Увеличиваем шрифт */
+}
+
+.export-form-container .buttons {
+  text-align: right;
+  margin-top: 15px;
+}
+
+.export-form-container .buttons button,
+.export-form-container .buttons a {
+  padding: 10px 20px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.export-form-container .buttons button {
+  background-color: #417690;
+  color: white;
+  border: none;
+}
+
+.export-form-container .buttons button:hover {
+  background-color: #2c5b73;
+}
+
+.export-form-container .buttons a {
+  background-color: #ccc;
+  color: #333;
+  margin-left: 10px;
+}
+
+.export-form-container .buttons a:hover {
+  background-color: #bbb;
+}
+
+/* Стили для полей даты */
+.date-field-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-field-container input[type="date"] {
+  width: 150px;
+  padding: 8px; /* Уменьшаем padding для полей даты */
+}
+
+.date-field-container label {
+  margin-bottom: 0;
+  margin-right: 5px;
+  font-weight: normal;
+  font-size: 14px; /* Уменьшаем шрифт для меток "с" и "по" */
+}

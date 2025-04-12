@@ -1,0 +1,26 @@
+<!-- django_app/templates/admin/confirm_restore.html -->
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div class="export-form-container">
+    <h1>Подтверждение восстановления</h1>
+    <p>Вы уверены, что хотите восстановить следующие объекты?</p>
+    <ul>
+      {% for obj in queryset %}
+        <li>{{ obj }}</li>
+      {% endfor %}
+    </ul>
+    <form method="post">
+      {% csrf_token %}
+      {% for obj in queryset %}
+        <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">
+      {% endfor %}
+      <input type="hidden" name="action" value="restore_selected">
+      <input type="hidden" name="confirm" value="yes">
+      <div class="buttons">
+        <button type="submit">Подтвердить восстановление</button>
+        <a href="{% url 'admin:'|add:opts.app_label|add:'_'|add:opts.model_name|add:'_changelist' %}">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

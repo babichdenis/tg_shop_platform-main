@@ -1,0 +1,12 @@
+<!-- django_app/templates/admin/base_site.html -->
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="{% static 'admin/css/admin_custom.css' %}">
+{% endblock %}
+
+{% block branding %}
+  <h1 id="site-name"><a href="{% url 'admin:index' %}">Администрирование Django</a></h1>
+{% endblock %}

@@ -1,0 +1,28 @@
+<!-- django_app/templates/admin/shop/order/import_products.html -->
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div class="export-form-container">
+    <h1>Импорт товаров</h1>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="import_form_submit" value="1">
+      <input type="hidden" name="action" value="import_products">
+
+      <p>
+        <label for="id_file">Выберите файл для импорта:</label>
+        {{ form.file }}
+      </p>
+
+      <p>
+        <label for="id_file_format">Формат файла:</label>
+        {{ form.file_format }}
+      </p>
+
+      <div class="buttons">
+        <button type="submit">Импортировать</button>
+        <a href="{% url 'admin:shop_product_changelist' %}">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

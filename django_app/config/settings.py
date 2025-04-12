@@ -79,9 +79,10 @@ DATABASES = {
     }
 }
 
-# Статические файлы
+# django_app/settings.py
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / "static"]  # Путь к папке django_app/static/
+STATIC_ROOT = BASE_DIR / "staticfiles"    # Путь, куда собираются файлы при collectstatic
 
 # Медиа файлы
 MEDIA_URL = '/media/'
