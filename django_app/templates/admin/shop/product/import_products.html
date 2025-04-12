@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div class="export-form-container">
+    <h1>Импорт товаров</h1>
+    <p>Загрузите файл в одном из поддерживаемых форматов (CSV, JSON, XLSX) с колонками: <code>id</code> (опционально), <code>name</code>, <code>category_path</code>, <code>price</code>, <code>description</code> (опционально), <code>photo_filename</code> (опционально), <code>is_active</code> (опционально).</p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <p>
+        <label for="id_file_format">Формат файла:</label>
+        {{ form.file_format }}
+      </p>
+      <p>
+        <label for="id_file">Файл:</label>
+        {{ form.file }}
+      </p>
+      <div class="buttons">
+        <button type="submit">Импортировать</button>
+        <a href="{% url 'admin:shop_product_changelist' %}">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

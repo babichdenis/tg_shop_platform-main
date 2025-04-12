@@ -1,4 +1,3 @@
-# django_app/shop/admin/base.py
 from django.contrib import admin
 from django.shortcuts import render
 from django.contrib import messages
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class BaseAdmin(admin.ModelAdmin):
     actions = ['deactivate_selected', 'restore_selected']
-    delete_selected = None  # Отключаем стандартное действие "Удалить выбранные объекты"
+    delete_selected = None
 
     def name_colored(self, obj):
         color = 'grey' if hasattr(obj, 'is_active') and not obj.is_active else 'black'
@@ -30,6 +29,7 @@ class BaseAdmin(admin.ModelAdmin):
             updated = 0
             for obj in queryset:
                 if hasattr(obj, 'is_active'):
+                    logger.info(f'Объект восстановлен: {obj}')
                     obj.is_active = True
                     obj.save()
                     updated += 1
@@ -43,7 +43,7 @@ class BaseAdmin(admin.ModelAdmin):
             'opts': self.model._meta,
             'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
         }
-        return render(request, 'admin/shop/product//confirm_restore.html', context)
+        return render(request, 'admin/confirm_restore.html', context)
     restore_selected.short_description = "Восстановить выбранные объекты"
 
     def delete_model(self, request, obj):
@@ -52,25 +52,3 @@ class BaseAdmin(admin.ModelAdmin):
             obj.soft_delete()
         else:
             obj.delete()
-
-def restore_selected(self, request, queryset):
-    if 'confirm' in request.POST:
-        updated = 0
-        for obj in queryset:
-            if hasattr(obj, 'is_active'):
-                logger.info(f'Объект восстановлен: {obj}')
-                obj.is_active = True
-                obj.save()
-                updated += 1
-        self.message_user(request, f"Восстановлено {updated} объектов.")
-        return None
-
-    context = {
-        'title': 'Подтверждение восстановления',
-        'queryset': queryset,
-        'action': 'restore_selected',
-        'opts': self.model._meta,
-        'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
-    }
-    return render(request, 'admin/shop/product/confirm_restore.html', context)
-restore_selected.short_description = "Восстановить выбранные объекты"

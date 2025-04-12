@@ -1,7 +1,10 @@
+# django_app/shop/admin/product_admin.py
 import json
 import csv
 import os
-from io import StringIO
+from io import StringIO, TextIOWrapper
+from django import forms
+from django.urls import path
 from django.contrib import admin, messages
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
@@ -11,54 +14,53 @@ import openpyxl
 import logging
 from .base import BaseAdmin
 from ..models import Product, Category
-from ..forms import ProductImportForm, ProductExportForm
+from ..forms import ProductExportForm
 
 logger = logging.getLogger(__name__)
 
+class ImportProductsForm(forms.Form):
+    FILE_FORMAT_CHOICES = [
+        ('csv', 'CSV'),
+        ('json', 'JSON'),
+        ('xlsx', 'Excel (XLSX)'),
+    ]
+    file_format = forms.ChoiceField(choices=FILE_FORMAT_CHOICES, label="Формат файла")
+    file = forms.FileField(label="Файл")
+
+    def clean_file(self):
+        file = self.cleaned_data['file']
+        file_format = self.cleaned_data.get('file_format')
+        valid_extensions = {
+            'csv': ['.csv'],
+            'json': ['.json'],
+            'xlsx': ['.xlsx'],
+        }
+        extension = os.path.splitext(file.name)[1].lower()
+        if extension not in valid_extensions.get(file_format, []):
+            raise forms.ValidationError(
+                f"Недопустимое расширение файла для формата {file_format}. Ожидается: {', '.join(valid_extensions[file_format])}"
+            )
+        return file
+
 @admin.register(Product)
 class ProductAdmin(BaseAdmin):
-    list_display = ('id', 'name', 'category', 'price', 'created_at', 'is_active')
+    list_display = ('id', 'name_colored', 'category', 'price', 'created_at', 'is_active')
     search_fields = ('name', 'description')
     list_filter = ('category', 'is_active')
-    actions = BaseAdmin.actions + ['import_products', 'export_products']
+    actions = BaseAdmin.actions + ['export_products']
 
-    def save_model(self, request, obj, form, change):
-        if change:
-            logger.info(f'Товар изменён: {obj}')
-        else:
-            logger.info(f'Создан новый товар: {obj}')
-        super().save_model(request, obj, form, change)
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('import/', self.admin_site.admin_view(self.import_products_view), name='import_products'),
+        ]
+        return custom_urls + urls
 
-    def delete_model(self, request, obj):
-        logger.info(f'Товар мягко удалён: {obj}')
-        obj.soft_delete()
-
-    def soft_delete_selected(self, request, queryset):
-        for obj in queryset:
-            obj.soft_delete()
-        self.message_user(request, "Выбранные товары мягко удалены.")
-    soft_delete_selected.short_description = "Мягко удалить выбранные товары"
-
-    def hard_delete_selected(self, request, queryset):
-        for obj in queryset:
-            logger.info(f'Товар полностью удалён: {obj}')
-            obj.delete()
-        self.message_user(request, "Выбранные товары полностью удалены.")
-    hard_delete_selected.short_description = "Полностью удалить выбранные товары"
-
-    def get_queryset(self, request):
-        return Product.objects.all()
-
-    def import_products(self, request):
-        logger.info("Начало импорта товаров")
-
-        # Если это POST-запрос от формы импорта
-        if 'import_form_submit' in request.POST:
-            logger.info("Получен POST-запрос от формы импорта")
-            form = ProductImportForm(request.POST, request.FILES)
+    def import_products_view(self, request):
+        if request.method == 'POST':
+            form = ImportProductsForm(request.POST, request.FILES)
             if form.is_valid():
-                logger.info("Форма валидна")
-                file = request.FILES['file']
+                file = form.cleaned_data['file']
                 file_format = form.cleaned_data['file_format']
                 errors = []
                 imported_count = 0
@@ -72,11 +74,12 @@ class ProductAdmin(BaseAdmin):
                         elif file_format == 'xlsx':
                             data = self.excel_to_json(file)
                         else:
-                            logger.error("Неподдерживаемый формат файла")
                             messages.error(request, "Неподдерживаемый формат файла.")
-                            return redirect('admin:shop_product_changelist')
+                            return self.import_products_view(request)
 
                         logger.info(f"Обработка {len(data)} записей из файла")
+                        products_to_create = []
+                        category_cache = {}
                         for index, row in enumerate(data):
                             try:
                                 if not row.get('name'):
@@ -93,7 +96,7 @@ class ProductAdmin(BaseAdmin):
                                     errors.append(f"Запись {index + 1}: Поле 'category_path' обязательно.")
                                     continue
 
-                                category = self.get_or_create_category(row['category_path'])
+                                category = self.get_or_create_category(row['category_path'], category_cache)
                                 if not category:
                                     errors.append(f"Запись {index + 1}: Не удалось создать категорию '{row['category_path']}'.")
                                     continue
@@ -105,28 +108,24 @@ class ProductAdmin(BaseAdmin):
                                         errors.append(f"Запись {index + 1}: Файл фотографии '{photo_path}' не найден.")
                                         continue
 
-                                product_id = row.get('id')
-                                if product_id:
-                                    try:
-                                        product = Product.objects.get(id=product_id)
-                                    except Product.DoesNotExist:
-                                        product = Product()
-                                else:
-                                    product = Product()
-
-                                product.name = row['name']
-                                product.description = row.get('description', '')
-                                product.price = price
-                                product.category = category
-                                product.is_active = row.get('is_active', True)
+                                product = Product(
+                                    name=row['name'],
+                                    description=row.get('description', ''),
+                                    price=price,
+                                    category=category,
+                                    is_active=row.get('is_active', True),
+                                )
                                 if photo_path:
                                     product.photo = photo_path
-                                product.save()
-
-                                imported_count += 1
+                                products_to_create.append(product)
 
                             except Exception as e:
                                 errors.append(f"Запись {index + 1}: Ошибка: {str(e)}")
+
+                        if products_to_create:
+                            Product.objects.bulk_create(products_to_create)
+                            imported_count = len(products_to_create)
+                            logger.info(f"Создано {imported_count} товаров")
 
                     if imported_count > 0:
                         messages.success(request, f"Импортировано {imported_count} товаров.")
@@ -139,37 +138,30 @@ class ProductAdmin(BaseAdmin):
                 except Exception as e:
                     logger.error(f"Ошибка при импорте: {str(e)}")
                     messages.error(request, f"Ошибка при импорте: {str(e)}")
-
                 return redirect('admin:shop_product_changelist')
+        else:
+            form = ImportProductsForm()
 
-            else:
-                logger.warning("Форма невалидна")
-                logger.warning(form.errors)
-                messages.error(request, "Форма заполнена некорректно. Проверьте введённые данные.")
-                return render(request, 'admin/shop/order/import_products.html', {'form': form})
+        context = {
+            'form': form,
+            'opts': self.model._meta,
+            'title': 'Импорт товаров',
+        }
+        return render(request, 'admin/shop/product/import_products.html', context)
 
-        # Если это POST-запрос от админки (выбор действия)
-        if request.method == "POST" and 'action' in request.POST:
-            logger.info("Получен POST-запрос от админки для действия import_products")
-            form = ProductImportForm()
-            context = {
-                'form': form,
-                'action': 'import_products',
-                'opts': self.model._meta,
-                'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
-            }
-            return render(request, 'admin/shop/order/import_products.html', context)
+    def get_queryset(self, request):
+        return Product.objects.filter(is_active=True)
 
-        # Если это GET-запрос, просто отображаем форму
-        form = ProductImportForm()
-        return render(request, 'admin/shop/order/import_products.html', {'form': form})
-
-    import_products.short_description = "Импортировать товары"
+    def save_model(self, request, obj, form, change):
+        if change:
+            logger.info(f'Товар изменён: {obj}')
+        else:
+            logger.info(f'Создан новый товар: {obj}')
+        super().save_model(request, obj, form, change)
 
     def export_products(self, request, queryset):
         logger.info("Начало экспорта товаров")
 
-        # Если это POST-запрос от формы экспорта
         if 'export_form_submit' in request.POST:
             logger.info("Получен POST-запрос от формы экспорта")
             form = ProductExportForm(request.POST)
@@ -185,7 +177,6 @@ class ProductAdmin(BaseAdmin):
                 logger.info(f"Параметры формы: file_format={file_format}, selected_fields={selected_fields}, "
                            f"category={category}, is_active={is_active}, date_from={date_from}, date_to={date_to}")
 
-                # Используем queryset для экспорта выбранных товаров
                 selected_ids = request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)
                 if selected_ids:
                     products_to_export = Product.objects.filter(id__in=selected_ids)
@@ -206,13 +197,11 @@ class ProductAdmin(BaseAdmin):
                         products_to_export = products_to_export.filter(created_at__lte=date_to)
                         logger.info(f"После фильтра по дате (по): {products_to_export.count()}")
 
-                # Проверяем, есть ли товары для экспорта
                 if not products_to_export.exists():
                     logger.warning("Нет товаров для экспорта после применения фильтров")
                     messages.warning(request, "Нет товаров для экспорта. Проверьте фильтры или добавьте товары в базу.")
                     return redirect('admin:shop_product_changelist')
 
-                # Формируем данные для экспорта
                 logger.info("Формирование данных для экспорта")
                 data = []
                 for product in products_to_export:
@@ -237,7 +226,6 @@ class ProductAdmin(BaseAdmin):
 
                 logger.info(f"Сформировано {len(data)} записей для экспорта")
 
-                # Генерируем файл и отправляем его пользователю для скачивания
                 try:
                     if file_format == 'json':
                         logger.info("Генерация JSON-файла")
@@ -283,16 +271,13 @@ class ProductAdmin(BaseAdmin):
                 messages.error(request, "Форма заполнена некорректно. Проверьте введённые данные.")
                 return render(request, 'admin/shop/order/export_products.html', {'form': form})
 
-        # Если это POST-запрос от админки (выбор действия)
         if request.method == "POST" and 'action' in request.POST:
             logger.info("Получен POST-запрос от админки для действия export_products")
-            # Проверяем, выбраны ли объекты
             selected_ids = request.POST.getlist(admin.helpers.ACTION_CHECKBOX_NAME)
             if not selected_ids:
                 self.message_user(request, "Пожалуйста, выберите хотя бы один товар для экспорта.", level=messages.WARNING)
                 return redirect('admin:shop_product_changelist')
 
-            # Отображаем форму экспорта
             form = ProductExportForm()
             context = {
                 'form': form,
@@ -303,7 +288,6 @@ class ProductAdmin(BaseAdmin):
             }
             return render(request, 'admin/shop/order/export_products.html', context)
 
-        # Если это GET-запрос, просто отображаем форму
         form = ProductExportForm()
         return render(request, 'admin/shop/order/export_products.html', {'form': form})
 
@@ -330,19 +314,34 @@ class ProductAdmin(BaseAdmin):
             data.append(row_data)
         return data
 
-    def get_or_create_category(self, category_path):
+    def get_or_create_category(self, category_path, category_cache=None):
+        if category_cache is None:
+            category_cache = {}
+
+        cache_key = category_path
+        if cache_key in category_cache:
+            return category_cache[cache_key]
+
         parts = category_path.split('/')
         parent = None
+        current_path = []
         for part in parts:
             part = part.strip()
             if not part:
+                continue
+            current_path.append(part)
+            path_key = '/'.join(current_path)
+            if path_key in category_cache:
+                parent = category_cache[path_key]
                 continue
             category, created = Category.objects.get_or_create(
                 name=part,
                 parent=parent,
                 defaults={'is_active': True}
             )
+            category_cache[path_key] = category
             parent = category
+
         return parent
 
     def get_category_path(self, category):
@@ -350,3 +349,7 @@ class ProductAdmin(BaseAdmin):
             return ''
         ancestors = category.get_ancestors(include_self=True)
         return '/'.join(ancestor.name for ancestor in ancestors)
+
+    def name_colored(self, obj):
+        return super().name_colored(obj)
+    name_colored.short_description = 'Название'

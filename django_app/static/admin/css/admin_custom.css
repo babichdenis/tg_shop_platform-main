@@ -124,3 +124,18 @@
   font-weight: normal;
   font-size: 14px; /* Уменьшаем шрифт для меток "с" и "по" */
 }
+
+#object-tools .addlink {
+  display: inline-block;
+  background: #417690;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+#object-tools .addlink:hover {
+  background: #2c5b73;
+}
