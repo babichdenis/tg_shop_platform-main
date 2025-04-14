@@ -251,3 +251,50 @@ async def search_pagination(callback: CallbackQuery, state: FSMContext):
     await show_search_results(callback.message, state, query, page)
     await callback.answer()
     logger.info(f"Пагинация поиска FAQ на страницу {page} завершена.")
+
+
+@router.message(F.text == "/faq")
+async def faq_command(message: Message, state: FSMContext) -> None:
+    """
+    Обработчик команды /faq.
+    """
+    try:
+        user_id = message.from_user.id
+        logger.info(f"Пользователь {user_id} вызвал команду /faq.")
+
+        # Устанавливаем состояние и начальную страницу
+        await state.set_state(FAQStates.browsing)
+        await state.update_data(current_page=1, search_message_id=None)
+
+        # Получаем FAQ для первой страницы
+        faq_items = await get_faq_page(page=1)
+        total_count = await get_faq_count()
+        total_pages = max(1, (total_count - 1) // FAQ_PER_PAGE + 1)
+
+        # Формируем текст
+        start_index = 0  # Первая страница, индекс начинается с 0
+        text = "❓ Часто задаваемые вопросы:\n\n"
+        if faq_items:
+            text += "\n".join(f"{start_index + i + 1}. {item.question}" for i, item in enumerate(faq_items))
+        else:
+            text = "❌ В базе пока нет вопросов\n"
+
+        # Формируем клавиатуру
+        if faq_items:
+            markup = build_faq_keyboard(faq_items, page=1, total_pages=total_pages)
+        else:
+            markup = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")]
+            ])
+            logger.debug("FAQ пуст, добавлена кнопка возврата в главное меню.")
+
+        # Отправляем сообщение
+        await message.answer(
+            text,
+            reply_markup=markup,
+            disable_web_page_preview=True
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка при выполнении команды /faq: {e}")
+        await message.answer("❌ Произошла ошибка при открытии FAQ")

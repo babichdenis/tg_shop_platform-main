@@ -9,6 +9,9 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 SUBSCRIPTION_CHANNEL_ID = os.getenv("SUBSCRIPTION_CHANNEL_ID", None)
 SUBSCRIPTION_GROUP_ID = os.getenv("SUBSCRIPTION_GROUP_ID", None)
 
+# Команды, доступные без подписки
+FREE_ACCESS_COMMANDS = ['/faq', '/about']
+
 # Поддержка
 SUPPORT_TELEGRAM = os.getenv("SUPPORT_TELEGRAM", "@SupportBot")
 

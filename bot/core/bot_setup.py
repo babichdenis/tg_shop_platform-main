@@ -1,4 +1,4 @@
-# File: bot/bot_setup.py
+# bot/core/bot_setup.py
 import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -16,6 +16,7 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="/catalog", description="Открыть каталог"),
         BotCommand(command="/cart", description="Корзина"),
         BotCommand(command="/faq", description="Частые вопросы"),
+        BotCommand(command="/about", description="О нас"),
         BotCommand(command="/profile", description="Мой профиль")
     ]
     await bot.set_my_commands(commands)
@@ -41,7 +42,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.startup.register(on_startup)
     
     # Импорт роутеров внутри функции
-    from bot.handlers.start import commands_router, callbacks_router
+    from bot.handlers.start import commands_router, callbacks_router, handlers_router
     from bot.handlers.product import router as product_router
     from bot.handlers.cart.handlers import router as cart_router
     from bot.handlers.faq import faq_router
@@ -51,10 +52,11 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.include_routers(
         commands_router,
         callbacks_router,
+        handlers_router,
         product_router,
         cart_router,
         faq_router,
-        catalog_router  # Новый роутер!
+        catalog_router
     )
     logger.info("Все роутеры зарегистрированы")
     

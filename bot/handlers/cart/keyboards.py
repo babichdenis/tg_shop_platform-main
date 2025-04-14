@@ -9,6 +9,10 @@ def generate_cart_keyboard(user, items, cart_quantity: int, cart_total, page: in
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(text="🛒 Корзина пуста", callback_data="noop")
         ])
+        keyboard.inline_keyboard.append([
+            InlineKeyboardButton(text="📋 Перейти в каталог", callback_data="catalog"),
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="main_menu")
+        ])
     else:
         # Форматируем сумму: проверяем, является ли cart_total целым числом
         formatted_total = f"{int(cart_total)}" if cart_total == int(cart_total) else f"{cart_total:.2f}"
@@ -65,6 +69,7 @@ def generate_cart_keyboard(user, items, cart_quantity: int, cart_total, page: in
         ])
 
     return keyboard
+
 def generate_back_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")]
@@ -79,9 +84,10 @@ def generate_skip_keyboard():
     ])
 
 def generate_confirmation_keyboard(total):
+    formatted_total = f"{int(total)}" if total == int(total) else f"{total:.2f}"
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text=f"Заказ на {total} ₽. Оформить?", callback_data="confirm"),
+            InlineKeyboardButton(text=f"Заказ на {formatted_total} ₽. Оформить?", callback_data="confirm"),
             InlineKeyboardButton(text="✏️ Изменить", callback_data="edit")
         ],
         [

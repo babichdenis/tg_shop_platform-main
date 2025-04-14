@@ -7,9 +7,10 @@ from aiogram.exceptions import TelegramBadRequest
 from asgiref.sync import sync_to_async
 from django_app.shop.models import Category, Product, TelegramUser
 from bot.handlers.cart.models import get_cart_quantity, get_cart_total
-from bot.core.config import CATEGORIES_PER_PAGE, PRODUCTS_PER_PAGE
+from bot.core.config import CATEGORIES_PER_PAGE, PRODUCTS_PER_PAGE, SUBSCRIPTION_CHANNEL_ID, SUBSCRIPTION_GROUP_ID
 from bot.core.utils import get_or_create_user
 from .keyboards import build_categories_keyboard, build_products_keyboard
+from bot.handlers.start.subscriptions import check_subscriptions
 
 router = Router()
 
@@ -148,6 +149,17 @@ async def catalog_command(message: Message) -> None:
         user_id = message.from_user.id
         logger.info(f"Пользователь {user_id} вызвал команду /catalog.")
 
+        # Проверка подписки
+        if SUBSCRIPTION_CHANNEL_ID or SUBSCRIPTION_GROUP_ID:
+            subscription_result, message_text = await check_subscriptions(message.bot, user_id, "/catalog")
+            if not subscription_result:
+                await message.answer(
+                    message_text,
+                    disable_web_page_preview=True,
+                    parse_mode="Markdown"
+                )
+                return
+
         # Получаем текст, категории и общее количество страниц
         text, categories, total_pages = await get_categories("root", 1)
 
@@ -171,7 +183,7 @@ async def catalog_command(message: Message) -> None:
         )
 
     except Exception as e:
-        logger.error(f"Ошибка при выполнении команды /catalog: {str(e)}")
+        logger.error(f"Ошибка при выполнении команды /catalog: {e}")
         await message.answer("❌ Произошла ошибка при открытии каталога")
 
 
@@ -278,5 +290,58 @@ async def products_pagination(callback: CallbackQuery) -> None:
     except Exception as e:
         logger.error(f"Ошибка при пагинации товаров: {str(e)}")
         await callback.answer("❌ Произошла ошибка при отображении товаров", show_alert=True)
+    finally:
+        await callback.answer()
+
+
+@router.callback_query(F.data == "catalog")
+async def catalog_callback(callback: CallbackQuery) -> None:
+    """
+    Обработчик нажатия кнопки 'Каталог'.
+    """
+    try:
+        user_id = callback.from_user.id
+        logger.info(f"Пользователь {user_id} нажал кнопку 'Каталог'.")
+
+        # Проверка подписки
+        if SUBSCRIPTION_CHANNEL_ID or SUBSCRIPTION_GROUP_ID:
+            subscription_result, message_text = await check_subscriptions(callback.bot, user_id, "catalog")
+            if not subscription_result:
+                try:
+                    await callback.message.edit_text(
+                        message_text,
+                        disable_web_page_preview=True,
+                        parse_mode="Markdown"
+                    )
+                except TelegramBadRequest:
+                    await callback.message.answer(
+                        message_text,
+                        disable_web_page_preview=True,
+                        parse_mode="Markdown"
+                    )
+                await callback.answer()
+                return
+
+        # Получаем текст, категории и общее количество страниц
+        text, categories, total_pages = await get_categories("root", 1)
+
+        # Получаем данные пользователя
+        user, _ = await get_or_create_user(
+            user_id=user_id,
+            first_name=callback.from_user.first_name,
+            last_name=callback.from_user.last_name,
+            username=callback.from_user.username,
+            language_code=callback.from_user.language_code
+        )
+
+        # Формируем клавиатуру для категорий
+        keyboard = await build_categories_keyboard(categories, "root", 1, total_pages, user)
+
+        # Обновляем сообщение
+        await safe_edit_message(callback, text, keyboard)
+
+    except Exception as e:
+        logger.error(f"Ошибка при выполнении callback 'catalog': {e}")
+        await callback.answer("❌ Произошла ошибка при открытии каталога", show_alert=True)
     finally:
         await callback.answer()

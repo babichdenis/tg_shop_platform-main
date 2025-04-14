@@ -8,7 +8,7 @@ from aiogram.utils.text_decorations import html_decoration as html
 
 from .models import get_cart_items, get_cart_details, get_cart_quantity, get_cart_total
 from .keyboards import generate_cart_keyboard
-from bot.core.config import CART_ITEMS_PER_PAGE  # Исправляем импорт
+from bot.core.config import CART_ITEMS_PER_PAGE
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ async def show_cart(user, message: Message | CallbackQuery, page: int = 1):
     if not items:
         text = "🛒 Ваша корзина пуста"
         kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📋 Перейти в каталог", callback_data="catalog")],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="main_menu")]
         ])
     else:
@@ -36,21 +37,21 @@ async def show_cart(user, message: Message | CallbackQuery, page: int = 1):
         # Форматируем сумму: проверяем, является ли cart_total целым числом
         formatted_total = f"{int(cart_total)}" if cart_total == int(cart_total) else f"{cart_total:.2f}"
 
-        # Формируем текст корзины
+        # Исправляем строку: убираем некорректное умножение
         text = (
             f"{html.bold('Корзина:')}\n\n"
             f"{items_text}\n\n"
-            f"{html.bold(f'{formatted_total} ₽')} * {cart_quantity} шт. = {html.bold(f'{formatted_total} ₽')}"
+            f"Всего {cart_quantity} шт. на сумму {html.bold(f'{formatted_total} ₽')}"
         )
 
-        # Генерируем клавиатуру с пагинацией, передаём cart_quantity и cart_total
+        # Генерируем клавиатуру с пагинацией
         kb = generate_cart_keyboard(
             user,
             items,
-            cart_quantity=cart_quantity,  # Добавляем
-            cart_total=cart_total,        # Добавляем
+            cart_quantity=cart_quantity,
+            cart_total=cart_total,
             page=page,
-            items_per_page=CART_ITEMS_PER_PAGE  # Исправляем на CART_ITEMS_PER_PAGE
+            items_per_page=CART_ITEMS_PER_PAGE
         )
 
     # Отображаем корзину
@@ -103,7 +104,7 @@ async def show_cart(user, message: Message | CallbackQuery, page: int = 1):
             await message.answer()
 
     except TelegramBadRequest as e:
-        logger.error(f"Ошибка при отображении корзины: {e}")
+        logger.error(f"Ошибка при отображении корзины для пользователя {user.telegram_id}: {e}")
         if isinstance(message, Message):
             await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
         else:

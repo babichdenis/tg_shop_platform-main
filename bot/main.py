@@ -1,12 +1,11 @@
-# File: bot/main.py
 import asyncio
 import logging
 import os
 import sys
 import django
 
-from bot.core.config import TELEGRAM_BOT_TOKEN, LOGGING_CONFIG  # Обновлённый путь
-from bot.core.bot_setup import setup_bot  # Обновлённый путь
+from bot.core.config import TELEGRAM_BOT_TOKEN, LOGGING_CONFIG
+from bot.core.bot_setup import setup_bot  
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)

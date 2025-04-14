@@ -19,34 +19,61 @@ from .keyboards import (
 )
 from .states import OrderState
 from .utils import show_cart
-from bot.core.config import SUPPORT_TELEGRAM, CART_ITEMS_PER_PAGE
-# Загружаем переменные из .env
-load_dotenv()
-SUPPORT_TELEGRAM = os.getenv("SUPPORT_TELEGRAM")
+from bot.core.config import SUPPORT_TELEGRAM, CART_ITEMS_PER_PAGE, SUBSCRIPTION_CHANNEL_ID, SUBSCRIPTION_GROUP_ID
+from bot.handlers.start.subscriptions import check_subscriptions
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
 
 router = Router()
 
+# Функция для проверки подписки
+async def ensure_subscription(request: Message | CallbackQuery, user_id: int, command: str) -> bool:
+    """Проверяет подписку пользователя и возвращает True, если доступ разрешён."""
+    if SUBSCRIPTION_CHANNEL_ID or SUBSCRIPTION_GROUP_ID:
+        subscription_result, message_text = await check_subscriptions(request.bot, user_id, command)
+        if not subscription_result:
+            await request.answer(
+                message_text,
+                disable_web_page_preview=True,
+                parse_mode="Markdown"
+            )
+            return False
+    return True
+
 # --- Обработчики корзины ---
 @router.callback_query(F.data == "cart")
 @router.message(F.text == "/cart")
 async def handle_cart(request: Message | CallbackQuery, state: FSMContext) -> None:
     """Обработчик кнопки/команды 'Корзина'."""
-    user, _ = await get_or_create_user(request.from_user.id)
-    logger.info(f"Обработчик корзины вызван пользователем: {user.telegram_id}")
-    await state.update_data(cart_page=1)  # Сбрасываем страницу на первую
+    user_id = request.from_user.id
+    logger.info(f"Пользователь {user_id} запросил корзину.")
+
+    # Проверка подписки
+    if isinstance(request, Message):
+        if not await ensure_subscription(request, user_id, "/cart"):
+            return
+
+    user, _ = await get_or_create_user(user_id)
+    await state.update_data(cart_page=1)
     await show_cart(user, request, page=1)
 
 @router.callback_query(F.data.startswith("increase_item_"))
 async def increase_item(callback: CallbackQuery, state: FSMContext):
     """Увеличивает количество товара в корзине."""
-    user, _ = await get_or_create_user(callback.from_user.id)
+    user_id = callback.from_user.id
+    logger.info(f"Пользователь {user_id} увеличивает количество товара.")
+
+    # Проверка подписки
+    if not await ensure_subscription(callback, user_id, "increase_item"):
+        return
+
+    user, _ = await get_or_create_user(user_id)
     product_id = int(callback.data.split("_")[-1])
     
     await update_cart_item_quantity(user, product_id, 1)
     await callback.answer("Количество увеличено")
+    logger.info(f"Пользователь {user_id} увеличил количество товара {product_id}.")
     
     # Получаем текущую страницу из состояния
     data = await state.get_data()
@@ -56,11 +83,19 @@ async def increase_item(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("decrease_item_"))
 async def decrease_item(callback: CallbackQuery, state: FSMContext):
     """Уменьшает количество товара в корзине."""
-    user, _ = await get_or_create_user(callback.from_user.id)
+    user_id = callback.from_user.id
+    logger.info(f"Пользователь {user_id} уменьшает количество товара.")
+
+    # Проверка подписки
+    if not await ensure_subscription(callback, user_id, "decrease_item"):
+        return
+
+    user, _ = await get_or_create_user(user_id)
     product_id = int(callback.data.split("_")[-1])
     
     await update_cart_item_quantity(user, product_id, -1)
     await callback.answer("Количество уменьшено")
+    logger.info(f"Пользователь {user_id} уменьшил количество товара {product_id}.")
     
     # Получаем текущую страницу из состояния
     data = await state.get_data()
@@ -70,11 +105,19 @@ async def decrease_item(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("remove_item_"))
 async def remove_item(callback: CallbackQuery, state: FSMContext):
     """Удаляет товар из корзины."""
-    user, _ = await get_or_create_user(callback.from_user.id)
+    user_id = callback.from_user.id
+    logger.info(f"Пользователь {user_id} удаляет товар из корзины.")
+
+    # Проверка подписки
+    if not await ensure_subscription(callback, user_id, "remove_item"):
+        return
+
+    user, _ = await get_or_create_user(user_id)
     product_id = int(callback.data.split("_")[-1])
     
     await remove_item_from_cart(user, product_id)
     await callback.answer("Товар удалён из корзины")
+    logger.info(f"Пользователь {user_id} удалил товар {product_id} из корзины.")
     
     # Получаем текущую страницу из состояния
     data = await state.get_data()
@@ -84,36 +127,35 @@ async def remove_item(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("cart_page_"))
 async def handle_cart_pagination(callback: CallbackQuery, state: FSMContext):
     """Обрабатывает пагинацию в корзине."""
-    user, _ = await get_or_create_user(callback.from_user.id)
+    user_id = callback.from_user.id
+    logger.info(f"Пользователь {user_id} переключает страницу корзины.")
+
+    # Проверка подписки
+    if not await ensure_subscription(callback, user_id, "cart_page"):
+        return
+
+    user, _ = await get_or_create_user(user_id)
     page = int(callback.data.split("_")[-1])
-    
-    # Получаем данные корзины
-    cart_items = await get_cart_items(user)
-    cart_quantity = await get_cart_quantity(user)
-    cart_total = await get_cart_total(user)
     
     # Сохраняем текущую страницу в состоянии
     await state.update_data(cart_page=page)
-    
-    # Генерируем клавиатуру с пагинацией
-    keyboard = generate_cart_keyboard(
-        user,
-        cart_items,
-        cart_quantity=cart_quantity,
-        cart_total=cart_total,
-        page=page,
-        items_per_page=CARТ_ITEMS_PER_PAGE  # Используем константу из bot/core/config.py
-    )
-    
-    await callback.message.edit_reply_markup(reply_markup=keyboard)
+    await show_cart(user, callback, page=page)
     await callback.answer()
 
 @router.callback_query(F.data == "clear_cart")
 async def clear_cart_handler(callback: CallbackQuery, state: FSMContext):
     """Очищает корзину."""
-    user, _ = await get_or_create_user(callback.from_user.id)
+    user_id = callback.from_user.id
+    logger.info(f"Пользователь {user_id} очищает корзину.")
+
+    # Проверка подписки
+    if not await ensure_subscription(callback, user_id, "clear_cart"):
+        return
+
+    user, _ = await get_or_create_user(user_id)
     await clear_cart(user)
     await callback.answer("Корзина очищена")
+    logger.info(f"Пользователь {user_id} очистил корзину.")
     
     # Сбрасываем страницу на первую
     await state.update_data(cart_page=1)
@@ -122,7 +164,14 @@ async def clear_cart_handler(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "checkout")
 async def start_checkout(callback: CallbackQuery, state: FSMContext):
     """Начинает процесс оформления заказа."""
-    user, _ = await get_or_create_user(callback.from_user.id)
+    user_id = callback.from_user.id
+    logger.info(f"Пользователь {user_id} начинает оформление заказа.")
+
+    # Проверка подписки
+    if not await ensure_subscription(callback, user_id, "checkout"):
+        return
+
+    user, _ = await get_or_create_user(user_id)
     cart_items = await get_cart_items(user)
     
     if not cart_items:
@@ -326,8 +375,11 @@ async def back_from_confirmation(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "confirm", OrderState.waiting_for_confirmation)
 async def confirm_order(callback: CallbackQuery, state: FSMContext, bot: Bot):
     """Обрабатывает подтверждение заказа."""
+    user_id = callback.from_user.id
+    logger.info(f"Пользователь {user_id} подтверждает заказ.")
+
     data = await state.get_data()
-    user, _ = await get_or_create_user(callback.from_user.id)
+    user, _ = await get_or_create_user(user_id)
 
     try:
         order = await create_order(
@@ -363,31 +415,37 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext, bot: Bot):
             parse_mode=ParseMode.HTML
         )
 
+        # Уведомление администратору
         if SUPPORT_TELEGRAM and SUPPORT_TELEGRAM.strip():
-            admin_text = (
-                f"🔔 Новый заказ #{order.id}!\n\n"
-                f"👤 Пользователь: {user.telegram_id}\n"
-                f"📞 Телефон: {data.get('phone')}\n"
-                f"📍 Адрес: {data.get('address')}\n"
-                f"🛒 Товары:\n{items_text}\n"
-                f"💵 Сумма: {total}₽"
-            )
             try:
+                admin_chat_id = int(SUPPORT_TELEGRAM)
+                admin_text = (
+                    f"🔔 Новый заказ #{order.id}!\n\n"
+                    f"👤 Пользователь: {user.telegram_id} (@{user.username if user.username else 'Нет ника'})\n"
+                    f"📞 Телефон: {data.get('phone')}\n"
+                    f"📍 Адрес: {data.get('address')}\n"
+                    f"💬 Пожелания: {data.get('wishes') if data.get('wishes') else 'Нет'}\n"
+                    f"⏰ Время доставки: {data.get('desired_delivery_time') if data.get('desired_delivery_time') else 'Не указано'}\n\n"
+                    f"🛒 Товары:\n{items_text}\n"
+                    f"💵 Сумма: {total} ₽"
+                )
                 await bot.send_message(
-                    chat_id=int(SUPPORT_TELEGRAM),
+                    chat_id=admin_chat_id,
                     text=admin_text,
                     parse_mode=ParseMode.HTML
                 )
-                logger.info(f"Уведомление о заказе #{order.id} успешно отправлено администратору")
+                logger.info(f"Уведомление о заказе #{order.id} успешно отправлено администратору в чат {admin_chat_id}")
+            except ValueError:
+                logger.error(f"Некорректный формат SUPPORT_TELEGRAM: {SUPPORT_TELEGRAM}. Ожидается числовой ID чата.")
             except Exception as e:
                 logger.error(f"Ошибка отправки уведомления администратору: {e}")
         else:
             logger.warning("SUPPORT_TELEGRAM не указан в .env, уведомление администратору не отправлено.")
 
     except Exception as e:
-        logger.error(f"Ошибка создания заказа: {e}")
+        logger.error(f"Ошибка создания заказа для пользователя {user_id}: {e}", exc_info=True)
         await callback.message.answer(
-            "❌ Ошибка при оформлении заказа. Пожалуйста, попробуйте снова или обратитесь в поддержку.",
+            f"❌ Ошибка при оформлении заказа: {str(e)}. Пожалуйста, попробуйте снова или обратитесь в поддержку: {SUPPORT_TELEGRAM}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="⬅️ В меню", callback_data="main_menu")]
             ])
